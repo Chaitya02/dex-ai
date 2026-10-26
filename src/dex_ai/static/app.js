@@ -68,6 +68,8 @@ function renderReceipt(r) {
     return li;
   }));
   $("receipt-out").hidden = false;
+  assigned = new Map(r.items.map((it) => [it.id, new Set()]));
+  renderAssign();
 }
 
 function row(cells) {
@@ -155,3 +157,123 @@ mic.addEventListener("pointerdown", (e) => { e.preventDefault(); startRecording(
 ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => mic.addEventListener(ev, stopRecording));
 mic.addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); startRecording(); } });
 mic.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") stopRecording(); });
+
+// ---- Assign (tap to toggle) and split ----
+let assigned = new Map();   // item id -> Set of names
+let taxTip = "proportional";
+const ME = "me";
+const label = (name) => (name === ME ? "Me" : name);
+
+function people() {
+  const named = $("people").value.split(",").map((s) => s.trim()).filter(Boolean);
+  return [ME, ...named.filter((n) => n.toLowerCase() !== ME)];
+}
+
+function renderAssign() {
+  if (!receipt) return;
+  const everyone = people();
+  // Drop anyone removed from the people field.
+  for (const set of assigned.values()) for (const n of [...set]) if (!everyone.includes(n)) set.delete(n);
+  $("assign-list").replaceChildren(...receipt.items.map((it) => {
+    const li = document.createElement("li");
+    const set = assigned.get(it.id);
+    li.classList.toggle("todo", set.size === 0);
+    const head = document.createElement("div");
+    head.className = "assign-row";
+    head.append(span(it.name), span(money(it.amount_cents), "num"));
+    const chips = document.createElement("div");
+    chips.className = "chips";
+    for (const n of everyone) chips.append(chip(label(n), set.has(n), () => { set.has(n) ? set.delete(n) : set.add(n); renderAssign(); }));
+    const all = everyone.every((n) => set.has(n));
+    const allChip = chip("Everyone", all, () => { everyone.forEach((n) => (all ? set.delete(n) : set.add(n))); renderAssign(); });
+    allChip.classList.add("all");
+    chips.append(allChip);
+    li.append(head, chips);
+    return li;
+  }));
+  const payer = $("payer");
+  const current = payer.value || ME;
+  payer.replaceChildren(...everyone.map((n) => new Option(label(n), n, false, n === current)));
+  $("assign-card").hidden = false;
+}
+
+function span(text, cls) {
+  const s = document.createElement("span");
+  s.textContent = text;
+  if (cls) s.className = cls;
+  return s;
+}
+
+function chip(text, on, onClick) {
+  const b = document.createElement("button");
+  b.className = "chip";
+  b.type = "button";
+  b.textContent = text;
+  b.setAttribute("aria-pressed", String(on));
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+$("people").addEventListener("input", renderAssign);
+
+document.querySelectorAll(".segmented button").forEach((b) => b.addEventListener("click", () => {
+  taxTip = b.dataset.mode;
+  document.querySelectorAll(".segmented button").forEach((o) => o.setAttribute("aria-checked", String(o === b)));
+}));
+
+$("split-btn").addEventListener("click", async () => {
+  const assignments = [...assigned].filter(([, s]) => s.size).map(([id, s]) => ({ item_id: id, people: [...s] }));
+  if (!assignments.length) return setStatus($("split-status"), "Assign at least one item first", true);
+  setStatus($("split-status"), "");
+  try {
+    const resp = await fetch("/api/split", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ receipt, assignments, payer: $("payer").value || ME, tax_tip: taxTip }),
+    });
+    const body = await resp.json();
+    if (!resp.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Couldn't split");
+    renderSplit(body);
+  } catch (err) {
+    setStatus($("split-status"), err.message, true);
+  }
+});
+
+function renderSplit(s) {
+  $("people-out").replaceChildren(...s.people.map((p) => {
+    const li = document.createElement("li");
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    const who = span(label(p.name), "who");
+    if (p.name === s.payer) who.append(Object.assign(document.createElement("small"), { textContent: "paid" }));
+    summary.append(who, span(money(p.total_cents), "amt"));
+    const lines = document.createElement("ul");
+    lines.className = "lines";
+    for (const it of p.items) {
+      const share = it.split_ways > 1 ? ` (1/${it.split_ways} of ${money(it.of_cents)})` : "";
+      lines.append(line(it.name + share, money(it.cents)));
+    }
+    for (const e of p.extras) lines.append(line(e.name, money(e.cents)));
+    details.append(summary, lines);
+    li.append(details);
+    return li;
+  }));
+  $("settle-out").replaceChildren(...s.settlements.map((t) => {
+    const d = document.createElement("div");
+    d.append(span(`${label(t.from)} → ${label(t.to)}`), Object.assign(document.createElement("strong"), { textContent: money(t.cents) }));
+    return d;
+  }));
+  const parts = [`Split ${money(s.split_total_cents)}`];
+  if (s.receipt_total_cents != null) parts.push(`of ${money(s.receipt_total_cents)} on the receipt`);
+  if (s.unassigned.length) parts.push(`· ${s.unassigned.length} item(s) unassigned: ${s.unassigned.map((u) => u.name).join(", ")}`);
+  else if (s.balanced) parts.push("· every cent accounted for ✓");
+  $("balance-out").textContent = parts.join(" ");
+  $("result-card").hidden = false;
+  $("result-card").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function line(left, right) {
+  const li = document.createElement("li");
+  li.append(span(left), span(right));
+  return li;
+}

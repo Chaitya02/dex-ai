@@ -93,6 +93,46 @@ tfoot tr.total td { color: var(--ink); font-weight: 600; padding-top: 8px; }
 .mic[aria-pressed="true"] { background: var(--bad); }
 .mic[aria-pressed="true"] .dot { opacity: 1; animation: pulse 1s infinite; }
 @keyframes pulse { 50% { transform: scale(1.6); opacity: .4; } }
+.assign-list { list-style: none; margin: 0; padding: 0; }
+.assign-list li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.assign-row { display: flex; justify-content: space-between; gap: 12px; }
+.assign-row .num { padding-left: 0; }
+.assign-list li.todo .assign-row span:first-child::after { content: " · unassigned"; color: var(--bad); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip {
+  padding: 4px 12px; font-size: 14px; border: 1px solid var(--line);
+  background: transparent; color: var(--ink);
+}
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+.chip.all { color: var(--muted); }
+.chip.all[aria-pressed="true"] { color: var(--card); }
+.options { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 16px; }
+.field.inline { margin: 0; }
+select {
+  padding: 8px 10px; font: inherit; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+.segmented { display: flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.segmented button { padding: 6px 12px; font-size: 13px; background: transparent; color: var(--muted); }
+.segmented button[aria-checked="true"] { background: var(--ink); color: var(--card); }
+.people { list-style: none; margin: 0; padding: 0; }
+.people > li { border-bottom: 1px solid var(--line); }
+.people details summary {
+  display: flex; justify-content: space-between; padding: 12px 0; cursor: pointer; list-style: none;
+}
+.people details summary::-webkit-details-marker { display: none; }
+.people .who { font-weight: 600; }
+.people .who small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.people .amt { font-weight: 600; font-variant-numeric: tabular-nums; }
+.lines { margin: 0 0 12px; padding: 0; list-style: none; font-size: 14px; color: var(--muted); }
+.lines li { display: flex; justify-content: space-between; padding: 2px 0; }
+.lines li span:last-child { font-variant-numeric: tabular-nums; }
+.settle { margin-top: 16px; display: grid; gap: 8px; }
+.settle div {
+  display: flex; justify-content: space-between; padding: 10px 14px;
+  background: var(--bg); border-radius: 10px;
+}
+.settle strong { font-variant-numeric: tabular-nums; }
 blockquote {
   margin: 12px 0 0; padding: 12px 14px;
   border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 8px 8px 0;

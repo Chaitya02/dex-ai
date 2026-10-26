@@ -53,6 +53,37 @@
     <p class="status" id="voice-status" role="status"></p>
     <blockquote id="transcript" hidden></blockquote>
   </section>
+
+  <section class="card" id="assign-card" hidden>
+    <div class="card-head">
+      <span class="step">3</span>
+      <h2>Assign</h2>
+    </div>
+    <p class="hint">Tap who had each item. Tap more than one person to share it.</p>
+    <ul class="assign-list" id="assign-list"></ul>
+    <div class="options">
+      <label class="field inline">
+        <span>Paid by</span>
+        <select id="payer"></select>
+      </label>
+      <div class="segmented" role="radiogroup" aria-label="Tax and tip">
+        <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
+        <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
+      </div>
+    </div>
+    <button class="primary" id="split-btn">Split it</button>
+    <p class="status" id="split-status" role="status"></p>
+  </section>
+
+  <section class="card" id="result-card" hidden>
+    <div class="card-head">
+      <span class="step">4</span>
+      <h2>Split</h2>
+    </div>
+    <ul class="people" id="people-out"></ul>
+    <div class="settle" id="settle-out"></div>
+    <p class="meta" id="balance-out"></p>
+  </section>
 </main>
 <script src="/static/app.js"></script>
 </body>

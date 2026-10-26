@@ -1,13 +1,15 @@
 """Dex HTTP API and the capture page."""
+from fractions import Fraction
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, llm, receipt, voice
+from dex_ai import __version__, llm, receipt, split, voice
 
 load_dotenv()
 
@@ -81,6 +83,36 @@ async def parse_receipt(image: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(e))
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+
+class ItemAssignment(BaseModel):
+    item_id: int
+    # Either people (equal split) or weights ("I had 2 of the 3 sodas").
+    people: list[str] = Field(default_factory=list)
+    weights: dict[str, PositiveFloat] = Field(default_factory=dict)
+
+
+class SplitRequest(BaseModel):
+    receipt: dict
+    assignments: list[ItemAssignment]
+    payer: str = "me"
+    tax_tip: Literal["proportional", "equal"] = "proportional"
+
+
+@app.post("/api/split")
+def split_receipt(req: SplitRequest) -> dict:
+    """Receipt + who had which item -> each person's share and who owes whom."""
+    assignments = []
+    for a in req.assignments:
+        weights = {n.strip(): Fraction(str(w)) for n, w in a.weights.items() if n.strip()}
+        for n in a.people:
+            if n.strip():
+                weights.setdefault(n.strip(), Fraction(1))
+        assignments.append(split.Assignment(a.item_id, weights))
+    try:
+        return split.split(req.receipt, assignments, req.payer.strip() or "me", req.tax_tip)
+    except (split.SplitError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/voice/transcribe")
