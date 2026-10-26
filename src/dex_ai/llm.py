@@ -51,13 +51,19 @@ def config_from_env() -> LLMConfig:
     return LLMConfig(provider, base_url, key_env, model)
 
 
-def chat(messages: list[dict], config: LLMConfig | None = None) -> str:
-    """Send a chat completion and return the reply text."""
-    config = config or config_from_env()
+def client(config: LLMConfig) -> OpenAI:
+    """An OpenAI-compatible client for the configured host, or LLMConfigError."""
     if not config.api_key:
         raise LLMConfigError(f"{config.api_key_env} is not set")
     if not config.model:
         raise LLMConfigError(f"Set DEX_MODEL for provider {config.provider!r}")
-    client = OpenAI(base_url=config.base_url, api_key=config.api_key)
-    response = client.chat.completions.create(model=config.model, messages=messages)
+    return OpenAI(base_url=config.base_url, api_key=config.api_key)
+
+
+def chat(messages: list[dict], config: LLMConfig | None = None, **kwargs) -> str:
+    """Send a chat completion and return the reply text."""
+    config = config or config_from_env()
+    response = client(config).chat.completions.create(
+        model=config.model, messages=messages, **kwargs
+    )
     return response.choices[0].message.content or ""

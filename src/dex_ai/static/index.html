@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dex · Split it</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">Dex</p>
+    <h1>Split it, out loud.</h1>
+    <p class="lede">Snap the bill, say who had what.</p>
+  </header>
+
+  <section class="card" id="receipt-card">
+    <div class="card-head">
+      <span class="step">1</span>
+      <h2>Receipt</h2>
+    </div>
+    <label class="drop" id="drop">
+      <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+      <img id="preview" alt="" hidden>
+      <span id="drop-hint">Take a photo or choose one</span>
+    </label>
+    <button class="primary" id="read-btn" disabled>Read receipt</button>
+    <p class="status" id="receipt-status" role="status"></p>
+    <div id="receipt-out" hidden>
+      <p class="meta" id="receipt-meta"></p>
+      <table>
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
+        <tbody id="items"></tbody>
+        <tfoot id="totals"></tfoot>
+      </table>
+      <ul class="checks" id="checks"></ul>
+    </div>
+  </section>
+
+  <section class="card" id="voice-card">
+    <div class="card-head">
+      <span class="step">2</span>
+      <h2>Who had what</h2>
+    </div>
+    <label class="field">
+      <span>Who's splitting</span>
+      <input id="people" type="text" placeholder="Aayush, Ketan, Kunal" autocomplete="off">
+    </label>
+    <p class="hint">Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”</p>
+    <button class="mic" id="mic-btn" aria-pressed="false">
+      <span class="dot"></span><span id="mic-label">Hold to talk</span>
+    </button>
+    <p class="status" id="voice-status" role="status"></p>
+    <blockquote id="transcript" hidden></blockquote>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
