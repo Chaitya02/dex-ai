@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, llm, receipt, split, voice
+from dex_ai import __version__, assign, llm, receipt, split, voice
 
 load_dotenv()
 
@@ -113,6 +113,33 @@ def split_receipt(req: SplitRequest) -> dict:
         return split.split(req.receipt, assignments, req.payer.strip() or "me", req.tax_tip)
     except (split.SplitError, KeyError, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+class AssignRequest(BaseModel):
+    receipt: dict
+    transcript: str
+    people: list[str] = Field(default_factory=list)
+    # The current split, so a spoken correction changes only what it mentions.
+    assignments: list[ItemAssignment] = Field(default_factory=list)
+    payer: str = "me"
+    tax_tip: Literal["proportional", "equal"] = "proportional"
+
+
+@app.post("/api/assign")
+def assign_items(req: AssignRequest) -> dict:
+    """Transcript -> item assignments, through the Muse Spark tool-calling agent."""
+    if not req.transcript.strip():
+        raise HTTPException(status_code=400, detail="Say who had what first")
+    if not req.receipt.get("items"):
+        raise HTTPException(status_code=400, detail="Read a receipt first")
+    state = assign.new_state(
+        req.receipt, req.people, [a.model_dump() for a in req.assignments],
+        payer=req.payer, tax_tip=req.tax_tip,
+    )
+    try:
+        return assign.run(state, req.transcript)
+    except llm.LLMConfigError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 @app.post("/api/voice/transcribe")

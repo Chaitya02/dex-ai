@@ -50,8 +50,16 @@
     <button class="mic" id="mic-btn" aria-pressed="false">
       <span class="dot"></span><span id="mic-label">Hold to talk</span>
     </button>
+    <form class="type-it" id="type-form">
+      <input id="typed" type="text" placeholder="…or type it" autocomplete="off" aria-label="Type who had what">
+      <button type="submit">Send</button>
+    </form>
     <p class="status" id="voice-status" role="status"></p>
     <blockquote id="transcript" hidden></blockquote>
+    <div class="agent" id="agent-out" hidden>
+      <p id="agent-summary"></p>
+      <ul class="questions" id="agent-questions"></ul>
+    </div>
   </section>
 
   <section class="card" id="assign-card" hidden>

@@ -69,6 +69,7 @@ function renderReceipt(r) {
   }));
   $("receipt-out").hidden = false;
   assigned = new Map(r.items.map((it) => [it.id, new Set()]));
+  weights = new Map();
   renderAssign();
 }
 
@@ -130,6 +131,7 @@ async function stopRecording() {
     $("transcript").textContent = r.transcript || "(nothing heard)";
     $("transcript").hidden = false;
     setStatus($("voice-status"), r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s of audio` : "");
+    if (r.transcript) await runAgent(r.transcript);
   } catch (err) {
     setStatus($("voice-status"), err.message, true);
   }
@@ -160,6 +162,7 @@ mic.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") s
 
 // ---- Assign (tap to toggle) and split ----
 let assigned = new Map();   // item id -> Set of names
+let weights = new Map();    // item id -> {name: portion}, only for unequal shares
 let taxTip = "proportional";
 const ME = "me";
 const label = (name) => (name === ME ? "Me" : name);
@@ -173,7 +176,9 @@ function renderAssign() {
   if (!receipt) return;
   const everyone = people();
   // Drop anyone removed from the people field.
-  for (const set of assigned.values()) for (const n of [...set]) if (!everyone.includes(n)) set.delete(n);
+  for (const [id, set] of assigned) {
+    for (const n of [...set]) if (!everyone.includes(n)) { set.delete(n); weights.delete(id); }
+  }
   $("assign-list").replaceChildren(...receipt.items.map((it) => {
     const li = document.createElement("li");
     const set = assigned.get(it.id);
@@ -183,9 +188,16 @@ function renderAssign() {
     head.append(span(it.name), span(money(it.amount_cents), "num"));
     const chips = document.createElement("div");
     chips.className = "chips";
-    for (const n of everyone) chips.append(chip(label(n), set.has(n), () => { set.has(n) ? set.delete(n) : set.add(n); renderAssign(); }));
+    // A tap means "equal split again", so it drops any unequal weights.
+    const w = weights.get(it.id);
+    for (const n of everyone) {
+      const text = w && set.has(n) ? `${label(n)} ×${w[n]}` : label(n);
+      const c = chip(text, set.has(n), () => { weights.delete(it.id); set.has(n) ? set.delete(n) : set.add(n); renderAssign(); });
+      if (justChanged.has(it.id) && set.has(n)) c.classList.add("just");
+      chips.append(c);
+    }
     const all = everyone.every((n) => set.has(n));
-    const allChip = chip("Everyone", all, () => { everyone.forEach((n) => (all ? set.delete(n) : set.add(n))); renderAssign(); });
+    const allChip = chip("Everyone", all, () => { weights.delete(it.id); everyone.forEach((n) => (all ? set.delete(n) : set.add(n))); renderAssign(); });
     allChip.classList.add("all");
     chips.append(allChip);
     li.append(head, chips);
@@ -222,7 +234,7 @@ document.querySelectorAll(".segmented button").forEach((b) => b.addEventListener
 }));
 
 $("split-btn").addEventListener("click", async () => {
-  const assignments = [...assigned].filter(([, s]) => s.size).map(([id, s]) => ({ item_id: id, people: [...s] }));
+  const assignments = currentAssignments();
   if (!assignments.length) return setStatus($("split-status"), "Assign at least one item first", true);
   setStatus($("split-status"), "");
   try {
@@ -276,4 +288,67 @@ function line(left, right) {
   const li = document.createElement("li");
   li.append(span(left), span(right));
   return li;
+}
+
+// ---- Agent: transcript -> assignments, then split ----
+let justChanged = new Set();   // item ids the agent touched, highlighted once
+
+function currentAssignments() {
+  return [...assigned].filter(([, s]) => s.size).map(([id, s]) =>
+    weights.has(id) ? { item_id: id, weights: weights.get(id) } : { item_id: id, people: [...s] });
+}
+
+$("type-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = $("typed").value.trim();
+  if (!text) return;
+  $("transcript").textContent = text;
+  $("transcript").hidden = false;
+  $("typed").value = "";
+  await runAgent(text);
+});
+
+async function runAgent(transcript) {
+  if (!receipt) return setStatus($("voice-status"), "Read a receipt first", true);
+  setStatus($("voice-status"), "Dex is assigning items…");
+  const current = currentAssignments();
+  try {
+    const resp = await fetch("/api/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        receipt, transcript, assignments: current,
+        people: people().filter((n) => n !== ME),
+        payer: $("payer").value || ME, tax_tip: taxTip,
+      }),
+    });
+    const out = await resp.json();
+    if (!resp.ok) throw new Error(typeof out.detail === "string" ? out.detail : "Dex couldn't assign that");
+    applyAgent(out);
+    setStatus($("voice-status"), `${out.actions.length} change(s) in ${out.steps} step(s)`);
+  } catch (err) {
+    setStatus($("voice-status"), err.message, true);
+  }
+}
+
+function applyAgent(out) {
+  // New people go into the people field so they get chips.
+  const named = people().filter((n) => n !== ME);
+  for (const n of out.added_people) if (!named.includes(n)) named.push(n);
+  $("people").value = named.join(", ");
+  justChanged = new Set(out.actions.filter((a) => a.item_id).map((a) => a.item_id));
+  assigned = new Map(receipt.items.map((it) => [it.id, new Set()]));
+  for (const a of out.assignments) assigned.set(a.item_id, new Set(Object.keys(a.weights)));
+  weights = new Map(out.assignments
+    .filter((a) => new Set(Object.values(a.weights)).size > 1)
+    .map((a) => [a.item_id, a.weights]));
+  taxTip = out.tax_tip;
+  document.querySelectorAll(".segmented button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.mode === taxTip)));
+  renderAssign();
+  justChanged = new Set();   // highlight stays until the next re-render
+  $("payer").value = out.payer;
+  $("agent-summary").textContent = out.summary || "Done.";
+  $("agent-questions").replaceChildren(...out.questions.map((q) => Object.assign(document.createElement("li"), { textContent: q })));
+  $("agent-out").hidden = false;
+  if ([...assigned.values()].some((s) => s.size)) $("split-btn").click();
 }

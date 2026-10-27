@@ -133,6 +133,17 @@ select {
   background: var(--bg); border-radius: 10px;
 }
 .settle strong { font-variant-numeric: tabular-nums; }
+.type-it { display: flex; gap: 8px; margin-top: 10px; }
+.type-it input {
+  flex: 1; min-width: 0; padding: 10px 12px; font: inherit; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.type-it button { padding: 0 16px; background: var(--ink); color: var(--card); font-weight: 600; }
+.agent { margin-top: 12px; font-size: 14px; }
+.agent p { margin: 0; }
+.agent p::before { content: "Dex · "; font-weight: 600; color: var(--accent); }
+.questions { margin: 6px 0 0; padding-left: 18px; color: var(--bad); }
+.chip.just { box-shadow: 0 0 0 2px var(--accent); }
 blockquote {
   margin: 12px 0 0; padding: 12px 14px;
   border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 8px 8px 0;
