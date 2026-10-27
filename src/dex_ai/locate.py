@@ -7,23 +7,36 @@ is enough. Every priced line ends in a right-aligned amount, so:
 1. "number" boxes are grouped into rows by their vertical centre.
 2. Rows whose rightmost number sits in the right part of the receipt are the
    priced lines: the items, then subtotal / charges / tax / tip / total.
-3. The reader (receipt.py) also reports roughly where each priced line is.
-   Those rough positions are matched to SAM's exact rows in order, allowing
-   extra rows (a "Table 7" header, a phone number) to go unmatched; a line
-   fitted through the matches cancels the reader's drift; then they're
-   matched again.
+3. The reader (receipt.py) also lists every line that ends in an amount, in
+   printed order, marked item or other, with a rough position. That list is
+   matched to SAM's exact rows in order, allowing extra rows (a "Table 7"
+   header, a phone number) to go unmatched; a line fitted through the matches
+   cancels the reader's drift; then they're matched again. Printed order is
+   what pins items down: on a real ALDI receipt the reader's positions for
+   the items were a whole line low, but an unlabeled subtotal right after
+   them is in the list too, so there is only one way to line them all up.
+
+SAM only finds printed digits when they're large in the frame. Generated
+receipts pass in one call; on a real phone photo the full image returns no
+numbers at all, while a crop of a few lines returns dozens. So when the full
+image doesn't place every item, the receipt is cut into short horizontal
+strips with 50% overlap (every line appears in two strips, which also covers
+SAM sometimes missing a strip), the strips run in parallel, and their boxes
+are shifted back into photo coordinates and de-duplicated.
 
 An item that can't be placed confidently is left unlocated rather than drawn
 in the wrong place. Boxes are in the photo's own pixels, so the page can draw
 them over the image at any size.
 """
 import base64
+import io
 import json
 import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 
 import httpx
+from PIL import Image
 
 from dex_ai import telemetry
 
@@ -31,6 +44,9 @@ SAM_URL = "https://api.meta.ai/v1/responses"
 MODEL = "sam-3.1"
 TIMEOUT = 30
 RIGHT_EDGE = 0.70        # a price's right edge is past this fraction of the paper's width
+STRIP_ASPECT = 0.22      # strip height as a fraction of the receipt's width: a few lines
+MAX_STRIPS = 16
+STRIP_WORKERS = 6
 
 _BOX = re.compile(r"<\|box;([^|]*)\|>")
 
@@ -94,12 +110,18 @@ def segment(image_data_url: str, prompt: str) -> list[dict]:
     return parse_boxes(text)
 
 
-def rows(numbers: list[dict]) -> list[dict]:
-    """Group number boxes into printed rows, top to bottom."""
+def rows(numbers: list[dict], factor: float = 0.6) -> list[dict]:
+    """Group number boxes into printed rows, top to bottom.
+
+    Boxes join a row when their centre is within `factor` of a typical glyph
+    height. Only boxes from one column should be grouped this way: across a
+    tilted or curled photo a line's left end sits lower than its right, by up
+    to half a line, and grouping both ends chains neighbouring lines together.
+    """
     if not numbers:
         return []
     heights = sorted(b["y2"] - b["y1"] for b in numbers)
-    tolerance = heights[len(heights) // 2] * 0.9     # a tilted line: qty on the left sits lower than its price
+    tolerance = heights[len(heights) // 2] * factor
     out: list[dict] = []
     for b in sorted(numbers, key=lambda b: (b["y1"] + b["y2"]) / 2):
         cy = (b["y1"] + b["y2"]) / 2
@@ -116,10 +138,34 @@ def rows(numbers: list[dict]) -> list[dict]:
     return out
 
 
-def priced_rows(all_rows: list[dict], paper: dict) -> list[dict]:
-    """Rows that end in a right-aligned amount."""
+def priced_rows(numbers: list[dict], paper: dict) -> list[dict]:
+    """Rows of the right-aligned amounts: one per priced line, top to bottom."""
     edge = paper["x1"] + RIGHT_EDGE * (paper["x2"] - paper["x1"])
-    return [r for r in all_rows if r["x2"] >= edge]
+    return rows([b for b in numbers if b["x2"] >= edge])
+
+
+def slope(numbers: list[dict], priced: list[dict], paper: dict, spacing: float) -> float:
+    """How much a line drops per pixel leftward (tilt or curl), from the photo.
+
+    Each priced row is paired with the nearest number in the left half of the
+    receipt (a quantity or product code on the same line); the median of their
+    drop-per-pixel is the tilt. 0 when there's nothing to measure.
+    """
+    mid = paper["x1"] + 0.5 * (paper["x2"] - paper["x1"])
+    left = [b for b in numbers if b["x2"] < mid]
+    slopes = []
+    for row in priced:
+        near = [b for b in left if abs((b["y1"] + b["y2"]) / 2 - row["cy"]) < spacing * 0.75]
+        if not near:
+            continue
+        b = min(near, key=lambda b: abs((b["y1"] + b["y2"]) / 2 - row["cy"]))
+        dx = row["x2"] - (b["x1"] + b["x2"]) / 2
+        if dx > 0:
+            slopes.append(((b["y1"] + b["y2"]) / 2 - row["cy"]) / dx)
+    if not slopes:
+        return 0.0
+    slopes.sort()
+    return slopes[len(slopes) // 2]
 
 
 def align(predicted: list[float], centres: list[float], skip_cost: float) -> list[int | None]:
@@ -211,25 +257,30 @@ def best_match(predicted: list[float], centres: list[float], spacing: float):
 def place(receipt: dict, paper: dict, numbers: list[dict]) -> dict:
     """Map the receipt's items to rows on the photo. Pure; testable without SAM.
 
-    The reader gives each priced line a rough position (0–1000 down the image);
-    SAM gives exact rows. Predictions are matched to rows in order, a straight
+    The reader lists every amount-ending line with a rough position (0–1000
+    down the image); SAM gives exact rows. Predictions are matched to rows in order, a straight
     line is fitted through the matches to cancel the reader's drift, and the
     match is redone (see best_match). Anything still more than half a line off
     is left unplaced.
     """
-    priced = priced_rows(rows(numbers), paper)
+    priced = priced_rows(numbers, paper)
     items = receipt["items"]
-    footer = receipt.get("footer_ys") or []
+    lines = receipt.get("lines") or []
     h = paper["h"]
     located: dict[int, dict] = {}
-    if priced and items and all(i.get("y") is not None for i in items):
+    tilt = 0.0
+    if priced and items and lines:
         centres = [r["cy"] for r in priced]
         gaps = sorted(b - a for a, b in zip(centres, centres[1:])) or [h / 20]
         spacing = gaps[len(gaps) // 2]
-        predicted = [i["y"] * h / 1000 for i in items] + [y * h / 1000 for y in footer]
+        tilt = slope(numbers, priced, paper, spacing)
+        predicted = [line["y"] * h / 1000 for line in lines]
         match, adjusted = best_match(predicted, centres, spacing)
+        # The k-th "item" line is the k-th item.
+        item_lines = [k for k, line in enumerate(lines) if line["kind"] == "item"]
         left =paper["x1"] + 0.03 * (paper["x2"] - paper["x1"])
-        for item, j, p in zip(items, match, adjusted):
+        for item, k in zip(items, item_lines):
+            j, p = match[k], adjusted[k]
             if j is None or abs(centres[j] - p) > spacing / 2:
                 continue
             row = priced[j]
@@ -243,9 +294,58 @@ def place(receipt: dict, paper: dict, numbers: list[dict]) -> dict:
         "height": paper["h"],
         "paper": {k: round(paper[k]) for k in ("x1", "y1", "x2", "y2")},
         "items": located,
+        # Each band is drawn level at its right end (the price) and drops by
+        # `slope` pixels per pixel leftward, so it follows a tilted photo.
+        "slope": round(tilt, 4),
         "priced_rows": len(priced),
-        "expected_rows": len(items) + len(footer),
+        "expected_rows": len(lines),
     }
+
+
+def iou(a: dict, b: dict) -> float:
+    ix = max(0.0, min(a["x2"], b["x2"]) - max(a["x1"], b["x1"]))
+    iy = max(0.0, min(a["y2"], b["y2"]) - max(a["y1"], b["y1"]))
+    inter = ix * iy
+    area = lambda r: (r["x2"] - r["x1"]) * (r["y2"] - r["y1"])
+    union = area(a) + area(b) - inter
+    return inter / union if union > 0 else 0.0
+
+
+def dedupe(boxes: list[dict], threshold: float = 0.5) -> list[dict]:
+    """Drop boxes that mostly overlap a more confident one (strips overlap)."""
+    kept: list[dict] = []
+    for b in sorted(boxes, key=lambda b: -b["c"]):
+        if all(iou(b, k) < threshold for k in kept):
+            kept.append(b)
+    return kept
+
+
+def strip_numbers(image: Image.Image, paper: dict) -> list[dict]:
+    """SAM 'number' on overlapping horizontal strips of the receipt, in photo pixels."""
+    W, H = image.size
+    x1 = max(0, int(paper["x1"]) - 8)
+    x2 = min(W, int(paper["x2"]) + 8)
+    y_top, y_bottom = max(0, int(paper["y1"])), min(H, int(paper["y2"]))
+    strip_h = max(120, int(STRIP_ASPECT * (x2 - x1)))
+    step = max(strip_h // 2, (y_bottom - y_top) // MAX_STRIPS + 1)
+    tops = list(range(y_top, max(y_top + 1, y_bottom - strip_h // 2), step))
+
+    def run(top: int) -> list[dict]:
+        crop = image.crop((x1, top, x2, min(top + strip_h, y_bottom)))
+        buf = io.BytesIO()
+        crop.save(buf, "JPEG", quality=90)
+        url = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+        try:
+            found = segment(url, "number")
+        except LocateError:
+            return []          # one strip failing still leaves its overlapping neighbours
+        return [{**b, "x1": b["x1"] + x1, "x2": b["x2"] + x1, "y1": b["y1"] + top,
+                 "y2": b["y2"] + top, "w": W, "h": H} for b in found]
+
+    with ThreadPoolExecutor(max_workers=STRIP_WORKERS) as pool:
+        found = [b for part in pool.map(run, tops) for b in part]
+    telemetry.note(strips=len(tops))
+    return dedupe(found)
 
 
 def locate(receipt: dict, image: bytes, mime: str) -> dict:
@@ -256,16 +356,19 @@ def locate(receipt: dict, image: bytes, mime: str) -> dict:
         paper_f = pool.submit(segment, data_url, "paper")
         numbers_f = pool.submit(segment, data_url, "number")
         papers, numbers = paper_f.result(), numbers_f.result()
-    if numbers:
-        w, h = numbers[0]["w"], numbers[0]["h"]
-    elif papers:
-        w, h = papers[0]["w"], papers[0]["h"]
-    else:
-        return {"width": None, "height": None, "paper": None, "items": {},
-                "priced_rows": 0, "expected_rows": None}
+    pil = Image.open(io.BytesIO(image))
+    w, h = pil.size
     paper = max(papers, key=lambda p: (p["x2"] - p["x1"]) * (p["y2"] - p["y1"])) if papers \
-        else {"x1": 0, "y1": 0, "x2": w, "y2": h, "w": w, "h": h}
+        else {"x1": 0, "y1": 0, "x2": w, "y2": h}
+    paper = {**paper, "w": w, "h": h}
     result = place(receipt, paper, numbers)
-    telemetry.note(numbers=len(numbers), priced_rows=result["priced_rows"],
+    used = "full"
+    if len(result["items"]) < len(receipt["items"]):
+        # Text too small in the full frame for SAM: retry on strips.
+        more = strip_numbers(pil.convert("RGB"), paper)
+        retry = place(receipt, paper, dedupe(numbers + more))
+        if len(retry["items"]) > len(result["items"]):
+            result, numbers, used = retry, numbers + more, "strips"
+    telemetry.note(numbers=len(numbers), priced_rows=result["priced_rows"], sam_pass=used,
                    expected_rows=result["expected_rows"], located=len(result["items"]))
     return result

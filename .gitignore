@@ -11,3 +11,6 @@ wheels/
 
 # Secrets
 .env
+
+# Real receipts: card digits and auth codes, never pushed
+samples/private/

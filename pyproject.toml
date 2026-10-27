@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.162.0",
     "httpx>=0.28.1",
     "openai>=3.38.0",
+    "pillow>=13.0.0",
     "python-dotenv>=1.2.4",
     "python-multipart>=0.0.32",
     "uvicorn[standard]>=0.54.0",
@@ -26,6 +27,5 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
-    "pillow>=13.0.0",
     "pytest>=9.1.1",
 ]

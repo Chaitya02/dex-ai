@@ -92,3 +92,13 @@ def test_parse_endpoint(monkeypatch):
 def test_parse_endpoint_rejects_bad_upload():
     resp = client.post("/api/receipts/parse", files={"image": ("r.txt", b"hello", "text/plain")})
     assert resp.status_code == 400
+
+
+def test_priced_lines_kept_only_when_they_match_the_items():
+    lines = [{"kind": "item", "amount": 1, "y": 100}, {"kind": "other", "amount": 1, "y": 200}]
+    one_item = {**RAW, "items": RAW["items"][:1]}
+    assert receipt.normalize({**one_item, "priced_lines": lines})["lines"] == [
+        {"kind": "item", "y": 100}, {"kind": "other", "y": 200}]
+    # Two items on the receipt but one item line: unusable, so dropped.
+    assert receipt.normalize({**RAW, "items": RAW["items"][:2], "priced_lines": lines})["lines"] == []
+    assert receipt.normalize({**one_item, "priced_lines": [{"kind": "item", "amount": 1, "y": "?"}]})["lines"] == []

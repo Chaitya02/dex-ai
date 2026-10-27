@@ -163,6 +163,8 @@ document.querySelectorAll("#views button").forEach((b) => b.addEventListener("cl
 
 function renderSpots(shares, everyone) {
   const pct = (v, of) => `${(100 * v) / of}%`;
+  // Bands are level at the price and drop leftward by `slope`, following a tilted photo.
+  $("spots").style.setProperty("--skew", `${Math.atan(-(spots.slope || 0))}rad`);
   $("spots").replaceChildren(...receipt.items.filter((it) => spots.items[it.id]).map((it) => {
     const b = spots.items[it.id];
     const who = shares.get(it.id) || [];
