@@ -49,6 +49,8 @@ let editing = null;         // item id whose chips are open
 let changed = new Set();    // item ids the last Dex turn touched
 let turns = [];             // [{text, out, before}] conversation with Dex
 let approved = false;
+let spots = null;           // /api/receipts/locate result: item boxes on the photo
+let view = "list";          // "photo" once SAM has placed items
 
 // Stable colour per person, in the order they were first named.
 const PALETTE = 7;
@@ -126,9 +128,64 @@ function loadReceipt(r) {
   approved = false;
   $("checks").replaceChildren(...r.checks.map((c) =>
     el("li", { className: c.ok ? "ok" : "bad", textContent: (c.ok ? "✓ " : "⚠ ") + c.message })));
+  spots = null;
+  view = "list";
   renderConvo();
   $("proposal-card").hidden = false;
   recompute();
+  locateItems(photo, r);
+}
+
+// ---- Photo: SAM 3.1 places each item on the receipt, in the background ----
+async function locateItems(file, r) {
+  setStatus($("sam-note"), "");
+  try {
+    const out = await postFile("/api/receipts/locate", "image", file, file.name, { receipt: JSON.stringify(r) });
+    if (receipt !== r) return;          // a newer receipt was read meanwhile
+    const placed = Object.keys(out.items).length;
+    if (!placed) return;                // nothing placed confidently: stay on the list
+    spots = out;
+    $("photo-img").src = URL.createObjectURL(file);
+    const missing = r.items.length - placed;
+    setStatus($("sam-note"), `SAM 3.1 placed ${placed} of ${r.items.length} items on your photo` +
+      (missing ? ` · ${missing} shown only in the list` : ""));
+    view = "photo";
+    renderProposal();
+  } catch {
+    // The photo view is extra; the list works without it.
+  }
+}
+
+document.querySelectorAll("#views button").forEach((b) => b.addEventListener("click", () => {
+  view = b.dataset.view;
+  renderProposal();
+}));
+
+function renderSpots(shares, everyone) {
+  const pct = (v, of) => `${(100 * v) / of}%`;
+  $("spots").replaceChildren(...receipt.items.filter((it) => spots.items[it.id]).map((it) => {
+    const b = spots.items[it.id];
+    const who = shares.get(it.id) || [];
+    const first = who.length ? colorOf(who[0].name) : "todo";
+    const spot = el("button", {
+      type: "button",
+      className: `spot ${first}` + (editing === it.id ? " open" : "") + (changed.has(it.id) ? " changed" : ""),
+      disabled: approved,
+      style: `left:${pct(b.x1, spots.width)};top:${pct(b.y1, spots.height)};` +
+             `width:${pct(b.x2 - b.x1, spots.width)};height:${pct(b.y2 - b.y1, spots.height)}`,
+    });
+    spot.setAttribute("aria-label", `${it.name}: ${who.length ? who.map((s) => label(s.name)).join(", ") : "unassigned"}`);
+    spot.addEventListener("click", () => { editing = editing === it.id ? null : it.id; renderProposal(); });
+    const tags = el("span", { className: "spot-tags" },
+      ...(who.length ? who.map((s) => el("span", { className: `tag ${colorOf(s.name)}`, textContent: label(s.name) }))
+                     : [el("span", { className: "tag todo", textContent: "?" })]));
+    spot.append(tags);
+    return spot;
+  }));
+  const open = receipt.items.find((it) => it.id === editing && spots.items[it.id]);
+  $("photo-editor").replaceChildren(...(open && !approved
+    ? [el("p", { className: "meta", textContent: `Who had ${open.name}?` }), chipEditor(open, everyone)]
+    : []));
 }
 
 // ---- Proposal: recompute on every change, draw it as the receipt ----
@@ -164,6 +221,12 @@ function renderProposal() {
   const shares = sharesByItem();
   const everyone = people();
   $("paper-head").textContent = [receipt.merchant, receipt.date].filter(Boolean).join(" · ") || "Receipt";
+  const onPhoto = !!spots && view === "photo";
+  $("views").hidden = !spots;
+  document.querySelectorAll("#views button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === view)));
+  $("photo-view").hidden = !onPhoto;
+  $("paper").hidden = onPhoto;
+  if (onPhoto) renderSpots(shares, everyone);
 
   $("lines-out").replaceChildren(...receipt.items.map((it) => {
     const who = shares.get(it.id) || [];
@@ -216,7 +279,7 @@ function renderProposal() {
 
   $("payer").replaceChildren(...everyone.map((n) => new Option(label(n), n, false, n === payer)));
   $("payer").disabled = approved;
-  document.querySelectorAll(".segmented button").forEach((b) => {
+  document.querySelectorAll("#taxtip button").forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.mode === taxTip));
     b.disabled = approved;
   });
@@ -266,7 +329,7 @@ function line(left, right) {
 
 $("people").addEventListener("input", () => { if (receipt) recompute(); });
 $("payer").addEventListener("change", (e) => { payer = e.target.value; recompute(); });
-document.querySelectorAll(".segmented button").forEach((b) => b.addEventListener("click", () => {
+document.querySelectorAll("#taxtip button").forEach((b) => b.addEventListener("click", () => {
   taxTip = b.dataset.mode;
   recompute();
 }));

@@ -9,8 +9,10 @@ shows the split on the receipt, and writes it to Balance Desk once you approve.
 2. **Read**: Muse Spark extracts merchant, line items, tax, tip and total as
    structured JSON. Code checks the arithmetic (items vs. subtotal, subtotal +
    tax + tip vs. total) and flags anything that doesn't add up.
-3. **Locate**: SAM 3.1 outlines each line item on the photo so the user can see
-   what was read.
+3. **Locate**: SAM 3.1 finds the receipt ("paper") and every printed number
+   ("number"); numbers are grouped into rows, and the reader's rough line
+   positions are aligned to the priced rows (order-preserving, drift-corrected)
+   so each item gets an exact band on the user's own photo.
 4. **Assign**: the user speaks ("I had the pasta, Aayush and Ketan split the
    pizza, everyone shared the fries, Kunal paid"). Muse Voice Transcribe turns it
    into text, with the receipt's item names and the user's contacts as

@@ -45,6 +45,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);
@@ -179,6 +180,28 @@ button:disabled { cursor: default; }
 .c-4 { color: var(--p4); background: var(--p4-bg); }
 .c-5 { color: var(--p5); background: var(--p5-bg); }
 .c-6 { color: var(--p6); background: var(--p6-bg); }
+
+/* ---- Photo view: SAM-placed item bands over the receipt ---- */
+.views { width: max-content; margin-bottom: 12px; }
+.views button[aria-selected="true"] { background: var(--ink); color: var(--card); }
+.photo-wrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.photo-wrap img { display: block; width: 100%; height: auto; }
+.spot {
+  position: absolute; padding: 0; border-radius: 4px;
+  border: 2px solid currentColor; background: color-mix(in srgb, currentColor 14%, transparent);
+}
+.spot:not(:disabled):hover, .spot.open { background: color-mix(in srgb, currentColor 26%, transparent); }
+.spot.open { outline: 2px solid var(--ink); outline-offset: 1px; }
+.spot.changed { animation: flash 1.6s ease-out; }
+.spot.todo { color: var(--warn); border-style: dashed; }
+.spot.c-me { color: var(--p-me); } .spot.c-0 { color: var(--p0); } .spot.c-1 { color: var(--p1); }
+.spot.c-2 { color: var(--p2); } .spot.c-3 { color: var(--p3); } .spot.c-4 { color: var(--p4); }
+.spot.c-5 { color: var(--p5); } .spot.c-6 { color: var(--p6); }
+/* In the gap between item name and price, where receipts are usually blank. */
+.spot-tags { position: absolute; right: 17%; top: 50%; transform: translateY(-50%); display: flex; gap: 3px; }
+.spot-tags .tag { font-size: 11px; padding: 0 6px; box-shadow: 0 0 0 1px var(--card); }
+.tag.todo { color: var(--warn); background: var(--p4-bg); }
+#photo-editor .meta { margin: 12px 0 0; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip { padding: 4px 12px; font-size: 14px; border: 1px solid var(--line); background: transparent; color: var(--ink); }

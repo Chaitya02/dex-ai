@@ -13,7 +13,7 @@ splits it item by item and writes it to Balance Desk once you approve. See
 |---|---|
 | `muse-spark-1.3` | Reads the receipt photo into line items (vision + JSON schema) |
 | `muse-voice-transcribe-1.0` | Transcribes who-had-what, biased toward people's and items' names |
-| `sam-3.1` | Item outlines on the receipt (planned) |
+| `sam-3.1` | Finds the receipt and every printed number; Dex turns those into each item's band on your photo |
 
 ## Built during the hackathon
 

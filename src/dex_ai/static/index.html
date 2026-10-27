@@ -57,6 +57,20 @@
       <span class="badge" id="state-badge"></span>
     </div>
 
+    <div class="segmented views" id="views" role="tablist" aria-label="View" hidden>
+      <button role="tab" aria-selected="true" data-view="photo">Photo</button>
+      <button role="tab" aria-selected="false" data-view="list">List</button>
+    </div>
+
+    <div class="photo-view" id="photo-view" hidden>
+      <div class="photo-wrap">
+        <img id="photo-img" alt="Your receipt with each item marked">
+        <div class="spots" id="spots"></div>
+      </div>
+      <div id="photo-editor"></div>
+      <p class="meta" id="sam-note"></p>
+    </div>
+
     <div class="paper" id="paper">
       <p class="paper-head" id="paper-head"></p>
       <ul class="lines-out" id="lines-out"></ul>
@@ -71,7 +85,7 @@
         <span>Paid by</span>
         <select id="payer"></select>
       </label>
-      <div class="segmented" role="radiogroup" aria-label="Tax and tip">
+      <div class="segmented" id="taxtip" role="radiogroup" aria-label="Tax and tip">
         <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
         <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
       </div>

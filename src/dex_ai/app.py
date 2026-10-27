@@ -1,4 +1,5 @@
 """Dex HTTP API and the capture page."""
+import json
 from fractions import Fraction
 from pathlib import Path
 from typing import Literal
@@ -10,7 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, assign, llm, receipt, split, telemetry, voice
+from dex_ai import __version__, assign, llm, locate, receipt, split, telemetry, voice
 
 load_dotenv()
 
@@ -100,6 +101,30 @@ def _parse_receipt(data: bytes) -> dict:
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
+
+
+@app.post("/api/receipts/locate")
+async def locate_items(image: UploadFile = File(...), receipt_json: str = Form(..., alias="receipt")) -> dict:
+    """Receipt photo + its parsed items -> each item's box on the photo (SAM 3.1)."""
+    data = await image.read()
+    try:
+        parsed = json.loads(receipt_json)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="receipt must be the JSON from /api/receipts/parse")
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        raise HTTPException(status_code=400, detail="receipt must be the JSON from /api/receipts/parse")
+    return await run_in_threadpool(_locate, parsed, data)
+
+
+def _locate(parsed: dict, data: bytes) -> dict:
+    try:
+        mime = receipt.sniff_image(data)
+        with telemetry.turn("locate", image_kb=len(data) // 1024, items=len(parsed["items"])):
+            return locate.locate(parsed, data, mime)
+    except receipt.ReceiptError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except locate.LocateError as e:
         raise HTTPException(status_code=e.status, detail=str(e))
 
 
