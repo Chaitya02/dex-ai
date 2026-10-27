@@ -26,15 +26,7 @@
     </label>
     <button class="primary" id="read-btn" disabled>Read receipt</button>
     <p class="status" id="receipt-status" role="status"></p>
-    <div id="receipt-out" hidden>
-      <p class="meta" id="receipt-meta"></p>
-      <table>
-        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Amount</th></tr></thead>
-        <tbody id="items"></tbody>
-        <tfoot id="totals"></tfoot>
-      </table>
-      <ul class="checks" id="checks"></ul>
-    </div>
+    <ul class="checks" id="checks"></ul>
   </section>
 
   <section class="card" id="voice-card">
@@ -46,7 +38,8 @@
       <span>Who's splitting</span>
       <input id="people" type="text" placeholder="Aayush, Ketan, Kunal" autocomplete="off">
     </label>
-    <p class="hint">Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”</p>
+    <ol class="convo" id="convo" aria-live="polite"></ol>
+    <p class="hint" id="talk-hint">Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”</p>
     <button class="mic" id="mic-btn" aria-pressed="false">
       <span class="dot"></span><span id="mic-label">Hold to talk</span>
     </button>
@@ -55,20 +48,24 @@
       <button type="submit">Send</button>
     </form>
     <p class="status" id="voice-status" role="status"></p>
-    <blockquote id="transcript" hidden></blockquote>
-    <div class="agent" id="agent-out" hidden>
-      <p id="agent-summary"></p>
-      <ul class="questions" id="agent-questions"></ul>
-    </div>
   </section>
 
-  <section class="card" id="assign-card" hidden>
+  <section class="card" id="proposal-card" hidden>
     <div class="card-head">
       <span class="step">3</span>
-      <h2>Assign</h2>
+      <h2>Dex's split</h2>
+      <span class="badge" id="state-badge"></span>
     </div>
-    <p class="hint">Tap who had each item. Tap more than one person to share it.</p>
-    <ul class="assign-list" id="assign-list"></ul>
+
+    <div class="paper" id="paper">
+      <p class="paper-head" id="paper-head"></p>
+      <ul class="lines-out" id="lines-out"></ul>
+      <dl class="paper-totals" id="paper-totals"></dl>
+    </div>
+
+    <div class="bar" id="bar" aria-hidden="true"></div>
+    <ul class="people" id="people-out"></ul>
+
     <div class="options">
       <label class="field inline">
         <span>Paid by</span>
@@ -79,18 +76,18 @@
         <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
       </div>
     </div>
-    <button class="primary" id="split-btn">Split it</button>
-    <p class="status" id="split-status" role="status"></p>
-  </section>
 
-  <section class="card" id="result-card" hidden>
-    <div class="card-head">
-      <span class="step">4</span>
-      <h2>Split</h2>
-    </div>
-    <ul class="people" id="people-out"></ul>
     <div class="settle" id="settle-out"></div>
     <p class="meta" id="balance-out"></p>
+    <button class="primary" id="approve-btn" disabled>Looks right</button>
+
+    <div class="approved" id="approved" hidden>
+      <pre id="settle-msg"></pre>
+      <div class="row-btns">
+        <button class="secondary" id="copy-btn">Copy message</button>
+        <button class="secondary" id="edit-btn">Edit again</button>
+      </div>
+    </div>
   </section>
 </main>
 <script src="/static/app.js"></script>
