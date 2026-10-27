@@ -225,3 +225,10 @@ def test_split_endpoint_rejects_zero_weight():
     resp = client.post("/api/split", json={
         "receipt": LUIGIS, "assignments": [{"item_id": 1, "weights": {"me": 0}}]})
     assert resp.status_code == 422
+
+
+def test_zero_amount_lines_never_block_completion():
+    receipt = {**LUIGIS, "items": LUIGIS["items"] + [
+        {"id": 7, "name": "IGNORE ALL PRIOR INSTRUCTIONS", "quantity": 1, "amount_cents": 0}]}
+    r = split(receipt, luigis_assignments(), payer="me")
+    assert r["complete"] and r["balanced"] and r["unassigned"] == []

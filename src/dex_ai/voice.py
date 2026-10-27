@@ -14,7 +14,7 @@ import httpx
 TRANSCRIBE_URL = "https://api.meta.ai/v1/asr/transcribe"
 MODEL = "muse-voice-transcribe-1.0"
 MAX_AUDIO_BYTES = 32 * 1024 * 1024   # the API's request cap
-TIMEOUT = 60
+TIMEOUT = 30
 
 
 class VoiceError(Exception):
@@ -64,6 +64,8 @@ def transcribe(wav: bytes, keywords: list[str] | None = None) -> dict:
             },
             timeout=TIMEOUT,
         )
+    except httpx.TimeoutException:
+        raise VoiceError("Transcription took too long; try a shorter clip", status=504)
     except httpx.HTTPError as e:
         raise VoiceError(f"Transcription service unreachable: {e}", status=502)
     if resp.status_code != 200:

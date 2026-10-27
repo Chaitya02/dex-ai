@@ -5,15 +5,17 @@ from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, assign, llm, receipt, split, voice
+from dex_ai import __version__, assign, llm, receipt, split, telemetry, voice
 
 load_dotenv()
 
 STATIC_DIR = Path(__file__).parent / "static"
+MAX_TRANSCRIPT = 2000   # characters; a spoken split is a few sentences
 
 SYSTEM_PROMPT = (
     "You are Dex, an expense companion for students and roommates who share "
@@ -70,19 +72,35 @@ def chat(req: ChatRequest) -> ChatResponse:
         )
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
     return ChatResponse(reply=reply, provider=config.provider, model=config.model)
+
+
+@app.get("/api/metrics")
+def metrics() -> dict:
+    """Latency percentiles and error counts per route over recent requests."""
+    return telemetry.metrics()
 
 
 @app.post("/api/receipts/parse")
 async def parse_receipt(image: UploadFile = File(...)) -> dict:
     """Receipt photo -> line items, tax, tip, total in cents, plus arithmetic checks."""
     data = await image.read()
+    # The model call blocks, so it runs on a worker thread, not the event loop.
+    return await run_in_threadpool(_parse_receipt, data)
+
+
+def _parse_receipt(data: bytes) -> dict:
     try:
-        return receipt.parse(data)
+        with telemetry.turn("receipt", image_kb=len(data) // 1024):
+            return receipt.parse(data)
     except receipt.ReceiptError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
 
 
 class ItemAssignment(BaseModel):
@@ -130,6 +148,8 @@ def assign_items(req: AssignRequest) -> dict:
     """Transcript -> item assignments, through the Muse Spark tool-calling agent."""
     if not req.transcript.strip():
         raise HTTPException(status_code=400, detail="Say who had what first")
+    if len(req.transcript) > MAX_TRANSCRIPT:
+        raise HTTPException(status_code=400, detail="That's too long; say it in a few sentences")
     if not req.receipt.get("items"):
         raise HTTPException(status_code=400, detail="Read a receipt first")
     state = assign.new_state(
@@ -137,9 +157,14 @@ def assign_items(req: AssignRequest) -> dict:
         payer=req.payer, tax_tip=req.tax_tip,
     )
     try:
-        return assign.run(state, req.transcript)
+        with telemetry.turn("assign", items=len(state.items), people=len(state.people),
+                            transcript_chars=len(req.transcript),
+                            correction=bool(req.assignments)):
+            return assign.run(state, req.transcript)
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except llm.LLMUnavailable as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
 
 
 @app.post("/api/voice/transcribe")
@@ -151,8 +176,15 @@ async def transcribe(audio: UploadFile = File(...), keywords: str = Form("")) ->
     as "I and Caton".
     """
     data = await audio.read()
-    hints = [k.strip() for k in keywords.split(",") if k.strip()][:100]
+    hints = [k.strip()[:60] for k in keywords.split(",") if k.strip()][:100]
+    return await run_in_threadpool(_transcribe, data, hints)
+
+
+def _transcribe(data: bytes, hints: list[str]) -> dict:
     try:
-        return voice.transcribe(data, keywords=hints or None)
+        with telemetry.turn("transcribe", audio_kb=len(data) // 1024, keywords=len(hints)) as t:
+            out = voice.transcribe(data, keywords=hints or None)
+            t["audio_ms"] = out.get("duration_ms")
+            return out
     except voice.VoiceError as e:
         raise HTTPException(status_code=e.status, detail=str(e))

@@ -5,11 +5,19 @@ OpenAI-style endpoint, so which host and model back Dex is configuration:
 
     DEX_PROVIDER=meta            # meta | baseten | fireworks
     DEX_MODEL=muse-spark-1.3     # optional: the host's own model id
+
+Every call has a timeout (the SDK's default is ten minutes) and at most one
+retry. Model calls only read, so a retry can't double anything; writes to
+Balance Desk carry their own idempotency key.
 """
 import os
+import time
 from dataclasses import dataclass
 
+import openai
 from openai import OpenAI
+
+from dex_ai import telemetry
 
 # provider -> (base URL, env var holding its API key, default model)
 PROVIDERS = {
@@ -22,10 +30,21 @@ PROVIDERS = {
     "fireworks": ("https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY", None),
 }
 DEFAULT_PROVIDER = "meta"
+STEP_TIMEOUT = 30.0   # seconds for one model call
+MAX_RETRIES = 1
 
 
 class LLMConfigError(Exception):
     """The provider, model or API key isn't set up."""
+
+
+class LLMUnavailable(Exception):
+    """The model host timed out or failed. The message is user-facing."""
+
+    def __init__(self, message: str, status: int, outcome: str):
+        super().__init__(message)
+        self.status = status
+        self.outcome = outcome
 
 
 @dataclass(frozen=True)
@@ -57,13 +76,39 @@ def client(config: LLMConfig) -> OpenAI:
         raise LLMConfigError(f"{config.api_key_env} is not set")
     if not config.model:
         raise LLMConfigError(f"Set DEX_MODEL for provider {config.provider!r}")
-    return OpenAI(base_url=config.base_url, api_key=config.api_key)
+    return OpenAI(base_url=config.base_url, api_key=config.api_key,
+                  timeout=STEP_TIMEOUT, max_retries=MAX_RETRIES)
+
+
+def complete(config: LLMConfig, timeout: float | None = None, **kwargs):
+    """One chat completion with a timeout, recorded on the current turn.
+
+    Raises LLMUnavailable (504 on timeout, 502 otherwise) instead of the SDK's
+    many exception types, so routes can fail with a clear message.
+    """
+    c = client(config)
+    start = time.perf_counter()
+    try:
+        response = c.chat.completions.create(
+            model=config.model, timeout=timeout or STEP_TIMEOUT, **kwargs
+        )
+    except openai.APITimeoutError:
+        telemetry.record_llm((time.perf_counter() - start) * 1000, model=config.model)
+        raise LLMUnavailable("The model took too long to answer; try again", 504, "timeout")
+    except openai.APIStatusError as e:
+        telemetry.record_llm((time.perf_counter() - start) * 1000, model=config.model)
+        raise LLMUnavailable(f"The model host returned an error ({e.status_code})", 502,
+                             f"http_{e.status_code}")
+    except openai.APIConnectionError:
+        telemetry.record_llm((time.perf_counter() - start) * 1000, model=config.model)
+        raise LLMUnavailable("Couldn't reach the model host", 502, "unreachable")
+    telemetry.record_llm((time.perf_counter() - start) * 1000,
+                         getattr(response, "usage", None), config.model)
+    return response
 
 
 def chat(messages: list[dict], config: LLMConfig | None = None, **kwargs) -> str:
     """Send a chat completion and return the reply text."""
     config = config or config_from_env()
-    response = client(config).chat.completions.create(
-        model=config.model, messages=messages, **kwargs
-    )
+    response = complete(config, messages=messages, **kwargs)
     return response.choices[0].message.content or ""

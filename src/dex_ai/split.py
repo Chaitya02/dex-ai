@@ -113,8 +113,9 @@ def split(receipt: dict, assignments: list[Assignment], payer: str,
     for s in shares.values():
         s["total_cents"] = s["items_cents"] + sum(e["cents"] for e in s["extras"])
 
+    # A $0.00 line (a free refill, or printed text the reader kept) needs nobody.
     unassigned = [{"item_id": i["id"], "name": i["name"], "cents": i["amount_cents"]}
-                  for i in receipt["items"] if i["id"] not in by_id]
+                  for i in receipt["items"] if i["id"] not in by_id and i["amount_cents"] != 0]
     split_total = sum(s["total_cents"] for s in shares.values())
     settlements = [
         {"from": n, "to": payer, "cents": shares[n]["total_cents"]}
