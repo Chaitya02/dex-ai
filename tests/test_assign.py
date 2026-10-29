@@ -233,3 +233,28 @@ def test_receipt_text_is_quoted_data_in_the_prompt():
 def test_people_names_cleaned():
     s = assign.new_state(LUIGIS, ["  Aayush\n\t ", "K" * 100])
     assert s.people == ["me", "Aayush", "K" * assign.MAX_NAME]
+
+
+# ---- contacts and misheard names ----
+
+def test_near_miss_of_a_contact_is_sent_back():
+    s = assign.new_state(LUIGIS, ["Kunal"], contacts=["Sousheel", "Chaitanya"])
+    with pytest.raises(assign.ToolError, match="close to 'Sousheel'"):
+        assign.apply(s, "add_person", {"name": "Sashiel"})
+    assert assign.apply(s, "add_person", {"name": "sousheel"}) == "Added Sousheel"
+
+
+def test_a_name_unlike_any_contact_can_be_added():
+    s = assign.new_state(LUIGIS, ["Kunal"], contacts=["Sousheel"])
+    assert assign.apply(s, "add_person", {"name": "Priya"}) == "Added Priya"
+
+
+def test_contacts_listed_in_prompt_but_not_people_already_in():
+    s = assign.new_state(LUIGIS, ["Kunal"], contacts=["Kunal", "Sousheel"])
+    assert 'Known contacts not in the split: "Sousheel"' in s.describe()
+
+
+def test_spoken_input_is_flagged_to_the_model(model):
+    fake = model(reply(content="ok"))
+    assign.run(state(), "Aich had the pizza", spoken=True)
+    assert "speech-to-text, may contain mishearings" in fake.sent[0][1]["content"]

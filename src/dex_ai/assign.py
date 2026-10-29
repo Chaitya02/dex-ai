@@ -20,6 +20,7 @@ Two limits keep a run bounded: MAX_STEPS model rounds and a DEADLINE in
 seconds. If either is hit, or the host fails after some changes were made, the
 run stops and returns what it has, flagged with `stopped`, rather than failing.
 """
+import difflib
 import json
 import re
 import time
@@ -50,7 +51,12 @@ Rules:
 - A person not yet in the split: call add_person first, then assign.
 - "I paid" / "Kunal paid": set_payer. "Split the tip evenly": set_tax_tip.
 - Corrections ("no, Aayush didn't have fries"): change only the items mentioned, keeping everyone else on them.
+- Known contacts are people the user already splits with. A name close to a contact (spelled or heard differently)
+  is that contact: add_person with the contact's exact name.
 - Never guess. If an item or person is genuinely ambiguous, leave it and call ask_user with one short question.
+- Speech-to-text input can mishear. A "name" that isn't a plausible name, or sounds like ordinary words
+  ("Aich" for "I each", "Caton" for "Ketan"), is a mishearing: read it as the closest sensible words or known
+  person. Only add a new person when the words clearly introduce someone; if unsure, ask instead.
 - Items nobody mentioned stay unassigned. Do not invent assignments.
 - Make all the calls you need in one turn when you can. When done, reply with one short sentence summarizing what changed."""
 
@@ -154,6 +160,7 @@ class State:
     payer: str = ME
     tax_tip: str = "proportional"
     added: list[str] = field(default_factory=list)       # people the agent added
+    contacts: list[str] = field(default_factory=list)    # known names not yet in the split
     questions: list[str] = field(default_factory=list)
     actions: list[dict] = field(default_factory=list)    # applied calls, for the UI
 
@@ -186,6 +193,9 @@ class State:
                          f"${i['amount_cents'] / 100:.2f}): {had}")
         lines.append("</receipt_data>")
         lines.append(f"People in the split: {', '.join(json.dumps(p) for p in self.people)}")
+        others = [c for c in self.contacts if c.lower() not in {p.lower() for p in self.people}]
+        if others:
+            lines.append(f"Known contacts not in the split: {', '.join(json.dumps(c) for c in others)}")
         lines.append(f"Paid by: {self.payer}. Tax and tip: {self.tax_tip}.")
         return "\n".join(lines)
 
@@ -242,6 +252,17 @@ def apply(state: State, name: str, args: dict) -> str:
         for p in state.people:
             if p.lower() == person.lower():
                 return f"{p} is already in the split."
+        # A near-miss of a known contact ("Sashiel" for "Sousheel") is that
+        # contact, not a stranger: send the model back to use the real name.
+        exact = [c for c in state.contacts if c.lower() == person.lower()]
+        if exact:
+            person = exact[0]
+        else:
+            close = difflib.get_close_matches(person.lower(), [c.lower() for c in state.contacts], n=1, cutoff=0.6)
+            if close:
+                contact = next(c for c in state.contacts if c.lower() == close[0])
+                raise ToolError(f"{person!r} isn't a contact but is close to {contact!r}. If that's who the "
+                                f"user meant, add_person with {contact!r}; if not, ask the user.")
         state.people.append(person)
         state.added.append(person)
         state.actions.append({"tool": name, "name": person})
@@ -265,13 +286,15 @@ def apply(state: State, name: str, args: dict) -> str:
     raise ToolError(f"Unknown tool {name!r}.")
 
 
-def run(state: State, transcript: str, config: llm.LLMConfig | None = None) -> dict:
+def run(state: State, transcript: str, config: llm.LLMConfig | None = None, spoken: bool = False) -> dict:
     """Let the model act on `transcript` through tools until it stops."""
     config = config or llm.config_from_env()
     llm.client(config)   # fail fast on a missing key or model
     messages = [
         {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": f"{state.describe()}\n\nThe user said:\n\"{transcript.strip()}\""},
+        {"role": "user", "content": f"{state.describe()}\n\nThe user said"
+                                    f"{' (speech-to-text, may contain mishearings)' if spoken else ''}:\n"
+                                    f"\"{transcript.strip()}\""},
     ]
     summary, steps, stopped = "", 0, "max_steps"
     started = time.monotonic()
@@ -336,7 +359,7 @@ def run(state: State, transcript: str, config: llm.LLMConfig | None = None) -> d
 
 
 def new_state(receipt: dict, people: list[str], assignments: list[dict] | None = None,
-              payer: str = ME, tax_tip: str = "proportional") -> State:
+              payer: str = ME, tax_tip: str = "proportional", contacts: list[str] | None = None) -> State:
     """Build the agent's state from a normalized receipt and the current split."""
     names: list[str] = [ME]
     for p in people:
@@ -344,7 +367,8 @@ def new_state(receipt: dict, people: list[str], assignments: list[dict] | None =
         if p and p.lower() not in SELF_WORDS and p.lower() not in (n.lower() for n in names):
             names.append(p)
     state = State(items={i["id"]: i for i in receipt["items"]}, people=names,
-                  payer=payer or ME, tax_tip=tax_tip)
+                  payer=payer or ME, tax_tip=tax_tip,
+                  contacts=[c for c in map(clean_name, contacts or []) if c and c.lower() not in SELF_WORDS])
     for a in assignments or []:
         weights = a.get("weights") or {n: 1 for n in a.get("people", [])}
         resolved = {}

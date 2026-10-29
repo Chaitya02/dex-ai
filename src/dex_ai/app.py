@@ -216,6 +216,8 @@ class AssignRequest(BaseModel):
     assignments: list[ItemAssignment] = Field(default_factory=list)
     payer: str = "me"
     tax_tip: Literal["proportional", "equal"] = "proportional"
+    contacts: list[str] = Field(default_factory=list, max_length=500)
+    spoken: bool = False   # came through speech recognition, so names may be misheard
 
 
 @app.post("/api/assign")
@@ -229,13 +231,13 @@ def assign_items(req: AssignRequest) -> dict:
         raise HTTPException(status_code=400, detail="Read a receipt first")
     state = assign.new_state(
         req.receipt, req.people, [a.model_dump() for a in req.assignments],
-        payer=req.payer, tax_tip=req.tax_tip,
+        payer=req.payer, tax_tip=req.tax_tip, contacts=req.contacts,
     )
     try:
         with telemetry.turn("assign", items=len(state.items), people=len(state.people),
                             transcript_chars=len(req.transcript),
                             correction=bool(req.assignments)):
-            return assign.run(state, req.transcript)
+            return assign.run(state, req.transcript, spoken=req.spoken)
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except llm.LLMUnavailable as e:

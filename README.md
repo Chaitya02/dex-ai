@@ -42,6 +42,16 @@ spoken assignment generated with macOS `say`.
 
 Run the tests with `uv run pytest`.
 
+## Evals
+
+`uv run python -m evals.run` scores every stage against known answers and
+rewrites [evals/REPORT.md](evals/REPORT.md): 12 seeded synthetic receipts plus a
+real phone photo for reading and placement, 20 who-had-what cases (corrections,
+weights, new people, ambiguity, mixed Hindi-English), and 6 cases spoken by
+macOS voices through the whole voice pipeline. It reports the failures that
+cost money separately (an item placed on the wrong line, an item put on the
+wrong person) from the safe ones (left for the user to fill in).
+
 ## Reliability and safety
 
 - **Bounded runs:** every model call has a timeout (30s, 45s for photos) and at

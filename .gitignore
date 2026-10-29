@@ -14,3 +14,6 @@ wheels/
 
 # Real receipts: card digits and auth codes, never pushed
 samples/private/
+
+# Raw eval runs (the summary is evals/REPORT.md)
+evals/results/

@@ -436,7 +436,7 @@ $("type-form").addEventListener("submit", async (e) => {
   await runAgent(text);
 });
 
-async function runAgent(text) {
+async function runAgent(text, spoken = false) {
   if (!receipt) return setStatus($("voice-status"), "Read a receipt first", true);
   if (approved) { approved = false; }
   const turn = { text, pending: true, before: snapshot() };
@@ -447,6 +447,7 @@ async function runAgent(text) {
     const out = await postJson("/api/assign", {
       receipt, transcript: text, assignments: currentAssignments(),
       people: people().filter((n) => n !== ME), payer, tax_tip: taxTip,
+      contacts: bd.contacts || [], spoken,
     });
     turn.out = out;
     applyAgent(out);
@@ -513,13 +514,16 @@ async function stopRecording() {
   }
   setStatus($("voice-status"), "Transcribing with Muse Voice Transcribe…");
   try {
-    // Names and item names bias recognition toward words the split depends on.
+    // People in the split and the receipt's items bias recognition toward the
+    // words the split depends on. Contacts go to the agent instead: hinting all
+    // of them made the recognizer hear "Arya and I each" as "Arya and Aayush"
+    // (evals/REPORT.md).
     const items = receipt ? receipt.items.map((it) => it.name) : [];
     const r = await postFile("/api/voice/transcribe", "audio", encodeWav(chunks, SAMPLE_RATE), "speech.wav",
-      { keywords: [...new Set([...people().filter((n) => n !== ME), ...(bd.contacts || []), ...items])].join(",") });
+      { keywords: [...new Set([...people().filter((n) => n !== ME), ...items])].join(",") });
     setStatus($("voice-status"), "");
     if (!r.transcript) return setStatus($("voice-status"), "Didn't catch that, try again", true);
-    await runAgent(r.transcript);
+    await runAgent(r.transcript, true);
   } catch (err) {
     setStatus($("voice-status"), err.message, true);
   }
