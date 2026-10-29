@@ -38,6 +38,7 @@
       <span>Who's splitting</span>
       <input id="people" type="text" placeholder="Aayush, Ketan, Kunal" autocomplete="off">
     </label>
+    <div class="contacts" id="contacts" hidden></div>
     <ol class="convo" id="convo" aria-live="polite"></ol>
     <p class="hint" id="talk-hint">Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”</p>
     <button class="mic" id="mic-btn" aria-pressed="false">
@@ -96,6 +97,17 @@
     <button class="primary" id="approve-btn" disabled>Looks right</button>
 
     <div class="approved" id="approved" hidden>
+      <div class="bd-save" id="bd-save" hidden>
+        <h3>Save to Balance Desk</h3>
+        <label class="field inline" id="bd-method-field">
+          <span>You paid with</span>
+          <input id="bd-method" list="bd-methods" placeholder="Amex, Venmo, Cash…" autocomplete="off">
+          <datalist id="bd-methods"></datalist>
+        </label>
+        <p class="meta" id="bd-new"></p>
+        <button class="primary" id="bd-save-btn">Save to Balance Desk</button>
+        <p class="status" id="bd-status" role="status"></p>
+      </div>
       <pre id="settle-msg"></pre>
       <div class="row-btns">
         <button class="secondary" id="copy-btn">Copy message</button>

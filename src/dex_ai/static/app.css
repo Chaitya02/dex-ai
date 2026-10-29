@@ -254,3 +254,12 @@ select {
   background: var(--paper); border: 1px solid var(--line); border-radius: 10px;
 }
 .row-btns { display: flex; gap: 8px; margin-top: 10px; }
+
+/* ---- Balance Desk ---- */
+.contacts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -4px 0 12px; }
+.contacts .meta { margin: 0 4px 0 0; }
+.contacts .chip { font-size: 13px; padding: 2px 10px; color: var(--muted); }
+.bd-save { margin-bottom: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.bd-save h3 { margin: 0 0 10px; font-size: 15px; }
+.bd-save .field input { width: 220px; }
+.bd-save .primary { margin-top: 10px; }

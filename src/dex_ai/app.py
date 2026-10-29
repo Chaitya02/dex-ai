@@ -1,5 +1,6 @@
 """Dex HTTP API and the capture page."""
 import json
+from datetime import date
 from fractions import Fraction
 from pathlib import Path
 from typing import Literal
@@ -11,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, assign, llm, locate, receipt, split, telemetry, voice
+from dex_ai import __version__, assign, balancedesk, llm, locate, receipt, split, telemetry, voice
 
 load_dotenv()
 
@@ -142,20 +143,69 @@ class SplitRequest(BaseModel):
     tax_tip: Literal["proportional", "equal"] = "proportional"
 
 
-@app.post("/api/split")
-def split_receipt(req: SplitRequest) -> dict:
-    """Receipt + who had which item -> each person's share and who owes whom."""
-    assignments = []
-    for a in req.assignments:
+def _assignments(items: list[ItemAssignment]) -> list[split.Assignment]:
+    out = []
+    for a in items:
         weights = {n.strip(): Fraction(str(w)) for n, w in a.weights.items() if n.strip()}
         for n in a.people:
             if n.strip():
                 weights.setdefault(n.strip(), Fraction(1))
-        assignments.append(split.Assignment(a.item_id, weights))
+        out.append(split.Assignment(a.item_id, weights))
+    return out
+
+
+@app.post("/api/split")
+def split_receipt(req: SplitRequest) -> dict:
+    """Receipt + who had which item -> each person's share and who owes whom."""
     try:
-        return split.split(req.receipt, assignments, req.payer.strip() or "me", req.tax_tip)
+        return split.split(req.receipt, _assignments(req.assignments), req.payer.strip() or "me", req.tax_tip)
     except (split.SplitError, KeyError, TypeError) as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/balancedesk/context")
+def balance_desk_context() -> dict:
+    """Contacts and payment methods from Balance Desk, or {linked: false}."""
+    if not balancedesk.configured():
+        return {"linked": False}
+    try:
+        with telemetry.turn("bd_context"):
+            return {"linked": True, **balancedesk.context()}
+    except balancedesk.BalanceDeskError as e:
+        return {"linked": False, "error": str(e)}
+
+
+class SaveRequest(SplitRequest):
+    idempotency_key: str = Field(min_length=8, max_length=100)
+    payment_method: str | None = None
+    allow_new_contacts: bool = False
+
+
+@app.post("/api/balancedesk/save")
+def save_to_balance_desk(req: SaveRequest) -> dict:
+    """Write an approved split to Balance Desk as one expense with exact shares.
+
+    The split is recomputed here from the receipt and assignments rather than
+    taken from the page, so what's saved is what split.py says, to the cent.
+    The page's idempotency key makes a retry or double tap save once.
+    """
+    try:
+        result = split.split(req.receipt, _assignments(req.assignments), req.payer.strip() or "me", req.tax_tip)
+    except (split.SplitError, KeyError, TypeError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not result["balanced"]:
+        raise HTTPException(status_code=400, detail="Assign every item so the split matches the receipt first")
+    if result["payer"] == "me" and not (req.payment_method or "").strip():
+        raise HTTPException(status_code=400, detail="Pick how you paid")
+    body = balancedesk.payload(req.receipt, result, key=req.idempotency_key,
+                               payment_method=req.payment_method,
+                               allow_new_contacts=req.allow_new_contacts,
+                               today=date.today().isoformat())
+    try:
+        with telemetry.turn("bd_save", people=len(result["people"])):
+            return balancedesk.save_split(body)
+    except balancedesk.BalanceDeskError as e:
+        raise HTTPException(status_code=e.status, detail=str(e))
 
 
 class AssignRequest(BaseModel):

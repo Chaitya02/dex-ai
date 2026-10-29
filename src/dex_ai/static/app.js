@@ -130,6 +130,8 @@ function loadReceipt(r) {
     el("li", { className: c.ok ? "ok" : "bad", textContent: (c.ok ? "✓ " : "⚠ ") + c.message })));
   spots = null;
   view = "list";
+  saved = null;
+  saveKey = null;
   renderConvo();
   $("proposal-card").hidden = false;
   recompute();
@@ -347,8 +349,13 @@ function settleMessage() {
 $("approve-btn").addEventListener("click", () => {
   approved = true;
   editing = null;
+  // One key per approval: a retry or double tap of Save reuses it, so
+  // Balance Desk saves this split once. Editing and approving again is a new
+  // approval and gets a new key.
+  if (!saved) saveKey = crypto.randomUUID();
   renderProposal();
   renderConvo();   // no undo once approved
+  renderSave();
 });
 $("edit-btn").addEventListener("click", () => {
   approved = false;
@@ -509,7 +516,7 @@ async function stopRecording() {
     // Names and item names bias recognition toward words the split depends on.
     const items = receipt ? receipt.items.map((it) => it.name) : [];
     const r = await postFile("/api/voice/transcribe", "audio", encodeWav(chunks, SAMPLE_RATE), "speech.wav",
-      { keywords: [...people().filter((n) => n !== ME), ...items].join(",") });
+      { keywords: [...new Set([...people().filter((n) => n !== ME), ...(bd.contacts || []), ...items])].join(",") });
     setStatus($("voice-status"), "");
     if (!r.transcript) return setStatus($("voice-status"), "Didn't catch that, try again", true);
     await runAgent(r.transcript);
@@ -540,3 +547,87 @@ mic.addEventListener("pointerdown", (e) => { e.preventDefault(); startRecording(
 ["pointerup", "pointerleave", "pointercancel"].forEach((ev) => mic.addEventListener(ev, stopRecording));
 mic.addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) { e.preventDefault(); startRecording(); } });
 mic.addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") stopRecording(); });
+
+// ---- Balance Desk: contacts to pick from, and saving an approved split ----
+let bd = { linked: false };   // /api/balancedesk/context
+let saveKey = null;           // idempotency key for this approval
+let saved = null;             // Balance Desk's answer once this receipt is saved
+
+async function loadBalanceDesk() {
+  try {
+    bd = await (await fetch("/api/balancedesk/context")).json();
+  } catch {
+    bd = { linked: false };
+  }
+  renderContacts();
+}
+
+function renderContacts() {
+  const box = $("contacts");
+  const named = new Set(people().map((n) => n.toLowerCase()));
+  const options = (bd.contacts || []).filter((c) => !named.has(c.toLowerCase())).slice(0, 12);
+  box.hidden = !bd.linked || !options.length;
+  box.replaceChildren(el("span", { className: "meta", textContent: "Your contacts:" }), ...options.map((c) => {
+    const b = el("button", { type: "button", className: "chip", textContent: `+ ${c}` });
+    b.addEventListener("click", () => {
+      $("people").value = [...people().filter((n) => n !== ME), c].join(", ");
+      renderContacts();
+      if (receipt) recompute();
+    });
+    return b;
+  }));
+}
+$("people").addEventListener("input", renderContacts);
+
+function newContacts() {
+  const known = new Set((bd.contacts || []).map((c) => c.toLowerCase()));
+  return result ? result.people.map((p) => p.name).filter((n) => n !== ME && !known.has(n.toLowerCase())) : [];
+}
+
+function renderSave() {
+  const box = $("bd-save");
+  box.hidden = !approved || !bd.linked;
+  if (box.hidden) return;
+  const iPaid = result && result.payer === ME;
+  $("bd-method-field").hidden = !iPaid || !!saved;
+  if (iPaid && !$("bd-methods").options.length) {
+    const methods = bd.payment_methods || [];
+    $("bd-methods").replaceChildren(...methods.map((m) => new Option(m, m)));
+    if (!$("bd-method").value && methods.length) $("bd-method").value = methods[0];
+  }
+  const fresh = newContacts();
+  $("bd-new").textContent = saved ? "" : fresh.length ? `Saving adds ${fresh.join(", ")} as new contact${fresh.length > 1 ? "s" : ""}.` : "";
+  const btn = $("bd-save-btn");
+  if (saved) {
+    btn.disabled = true;
+    btn.textContent = "Saved to Balance Desk ✓";
+    setStatus($("bd-status"), `Expense #${saved.expense.id}${saved.replayed ? " (already saved earlier)" : ""}. ` +
+      "Edits from here on won't change it; edit it in Balance Desk.");
+  } else {
+    btn.disabled = false;
+    btn.textContent = "Save to Balance Desk";
+  }
+}
+
+$("bd-save-btn").addEventListener("click", async () => {
+  if (saved || !saveKey) return;
+  const btn = $("bd-save-btn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  setStatus($("bd-status"), "");
+  try {
+    saved = await postJson("/api/balancedesk/save", {
+      receipt, assignments: currentAssignments(), payer, tax_tip: taxTip,
+      payment_method: $("bd-method").value.trim() || null,
+      idempotency_key: saveKey,
+      allow_new_contacts: newContacts().length > 0,
+    });
+    // Contacts Balance Desk just created are known from now on.
+    bd.contacts = [...new Set([...(bd.contacts || []), ...newContacts()])];
+  } catch (err) {
+    setStatus($("bd-status"), err.message + " (safe to try again: it can only save once)", true);
+  }
+  renderSave();
+});
+
+loadBalanceDesk();
