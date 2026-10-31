@@ -5,6 +5,11 @@ OpenAI-style endpoint, so which host and model back Dex is configuration:
 
     DEX_PROVIDER=meta            # meta | baseten | fireworks
     DEX_MODEL=muse-spark-1.3     # optional: the host's own model id
+    DEX_REASONING_EFFORT=low     # optional: none | low | medium | high
+
+Muse Spark Open reasons before it answers. Left to itself it spent ~4,000
+reasoning tokens (18.6s) reading one receipt; at "low" it spends ~1,000 (7.2s)
+with the same answer, so that's Baseten's default.
 
 Every call has a timeout (the SDK's default is ten minutes) and at most one
 retry. Model calls only read, so a retry can't double anything; writes to
@@ -30,6 +35,9 @@ PROVIDERS = {
     "fireworks": ("https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY", None),
 }
 DEFAULT_PROVIDER = "meta"
+# Reasoning effort sent by default, per host (None: don't send the parameter).
+DEFAULT_EFFORT = {"baseten": "low"}
+EFFORTS = ("none", "low", "medium", "high")
 STEP_TIMEOUT = 30.0   # seconds for one model call
 MAX_RETRIES = 1
 
@@ -53,6 +61,7 @@ class LLMConfig:
     base_url: str
     api_key_env: str
     model: str | None
+    reasoning_effort: str | None = None
 
     @property
     def api_key(self) -> str | None:
@@ -67,7 +76,10 @@ def config_from_env() -> LLMConfig:
         )
     base_url, key_env, default_model = PROVIDERS[provider]
     model = os.environ.get("DEX_MODEL", "").strip() or default_model
-    return LLMConfig(provider, base_url, key_env, model)
+    effort = os.environ.get("DEX_REASONING_EFFORT", "").strip().lower() or DEFAULT_EFFORT.get(provider)
+    if effort and effort not in EFFORTS:
+        raise LLMConfigError(f"DEX_REASONING_EFFORT must be one of {', '.join(EFFORTS)}")
+    return LLMConfig(provider, base_url, key_env, model, effort)
 
 
 def client(config: LLMConfig) -> OpenAI:
@@ -87,6 +99,8 @@ def complete(config: LLMConfig, timeout: float | None = None, **kwargs):
     many exception types, so routes can fail with a clear message.
     """
     c = client(config)
+    if config.reasoning_effort and "reasoning_effort" not in kwargs:
+        kwargs["reasoning_effort"] = config.reasoning_effort
     start = time.perf_counter()
     try:
         response = c.chat.completions.create(

@@ -44,6 +44,11 @@ SAM_URL = "https://api.meta.ai/v1/responses"
 MODEL = "sam-3.1"
 TIMEOUT = 30
 RIGHT_EDGE = 0.70        # a price's right edge is past this fraction of the paper's width
+# Lines the best alignment must beat any different one by, or nothing is
+# placed. Calibrated on the eval set, both models, guard off: 52 placements,
+# all correct, margins 0.22-2.28; the one captured wrong placement (9 items a
+# line out) had 0.10. 0.3 catches that and keeps 51 of 52 correct ones.
+MIN_MARGIN = 0.3
 STRIP_ASPECT = 0.22      # strip height as a fraction of the receipt's width: a few lines
 MAX_STRIPS = 16
 STRIP_WORKERS = 6
@@ -218,7 +223,8 @@ def fit(pairs: list[tuple[float, float]]) -> tuple[float, float]:
     return a, my - a * mx
 
 
-def best_match(predicted: list[float], centres: list[float], spacing: float):
+def best_match(predicted: list[float], centres: list[float], spacing: float,
+               keys: list[int] | None = None):
     """Align, fit, realign, from many starting guesses; keep the best fit.
 
     The reader's positions can be off in offset and in scale, so one pass can
@@ -228,9 +234,15 @@ def best_match(predicted: list[float], centres: list[float], spacing: float):
     realigns. What separates right from wrong is the pattern of gaps (the
     blank line before the subtotal), so each result is scored by how far its
     fitted predictions land from their rows, plus a line's spacing for every
-    line left unplaced. Returns (match, adjusted predictions).
+    line left unplaced.
+
+    Returns (match, adjusted predictions, best score, runner-up score), where
+    the runner-up is the best result that maps the lines in `keys` (the
+    items) differently. A runner-up close to the best means the photo doesn't
+    settle which line is which.
     """
     n, m = len(predicted), len(centres)
+    keys = list(range(n)) if keys is None else keys
     starts = [(1.0, 0.0)]
     if n >= 2 and predicted[-1] != predicted[0]:
         span = predicted[-1] - predicted[0]
@@ -239,7 +251,7 @@ def best_match(predicted: list[float], centres: list[float], spacing: float):
                 a = (centres[e] - centres[s]) / span
                 if 0.5 <= a <= 2.0:            # a photo isn't squashed or stretched beyond that
                     starts.append((a, centres[s] - a * predicted[0]))
-    best = None
+    by_mapping: dict[tuple, tuple] = {}
     for a0, b0 in starts:
         adjusted = [a0 * p + b0 for p in predicted]
         match = align(adjusted, centres, skip_cost=spacing)
@@ -249,9 +261,13 @@ def best_match(predicted: list[float], centres: list[float], spacing: float):
             match = align(adjusted, centres, skip_cost=spacing)
         score = sum(abs(centres[j] - p) if j is not None else spacing
                     for p, j in zip(adjusted, match))
-        if best is None or score < best[0]:
-            best = (score, match, adjusted)
-    return best[1], best[2]
+        key = tuple(match[k] for k in keys)
+        if key not in by_mapping or score < by_mapping[key][0]:
+            by_mapping[key] = (score, match, adjusted)
+    ranked = sorted(by_mapping.values(), key=lambda r: r[0])
+    best = ranked[0]
+    runner_up = ranked[1][0] if len(ranked) > 1 else float("inf")
+    return best[1], best[2], best[0], runner_up
 
 
 def place(receipt: dict, paper: dict, numbers: list[dict]) -> dict:
@@ -269,15 +285,22 @@ def place(receipt: dict, paper: dict, numbers: list[dict]) -> dict:
     h = paper["h"]
     located: dict[int, dict] = {}
     tilt = 0.0
+    margin = None
     if priced and items and lines:
         centres = [r["cy"] for r in priced]
         gaps = sorted(b - a for a, b in zip(centres, centres[1:])) or [h / 20]
         spacing = gaps[len(gaps) // 2]
         tilt = slope(numbers, priced, paper, spacing)
         predicted = [line["y"] * h / 1000 for line in lines]
-        match, adjusted = best_match(predicted, centres, spacing)
         # The k-th "item" line is the k-th item.
         item_lines = [k for k, line in enumerate(lines) if line["kind"] == "item"]
+        match, adjusted, score, runner_up = best_match(predicted, centres, spacing, keys=item_lines)
+        margin = (runner_up - score) / spacing
+        # The photo doesn't settle which line is which: an answer a hair better
+        # than one with the items elsewhere is a coin toss, and a band on the
+        # wrong line is worse than none (the list still shows every item).
+        if margin < MIN_MARGIN:
+            match = [None] * len(match)
         left =paper["x1"] + 0.03 * (paper["x2"] - paper["x1"])
         for item, k in zip(items, item_lines):
             j, p = match[k], adjusted[k]
@@ -299,6 +322,7 @@ def place(receipt: dict, paper: dict, numbers: list[dict]) -> dict:
         "slope": round(tilt, 4),
         "priced_rows": len(priced),
         "expected_rows": len(lines),
+        "margin": None if margin is None else round(min(margin, 99.0), 2),
     }
 
 
@@ -369,6 +393,6 @@ def locate(receipt: dict, image: bytes, mime: str) -> dict:
         retry = place(receipt, paper, dedupe(numbers + more))
         if len(retry["items"]) > len(result["items"]):
             result, numbers, used = retry, numbers + more, "strips"
-    telemetry.note(numbers=len(numbers), priced_rows=result["priced_rows"], sam_pass=used,
+    telemetry.note(numbers=len(numbers), priced_rows=result["priced_rows"], sam_pass=used, margin=result["margin"],
                    expected_rows=result["expected_rows"], located=len(result["items"]))
     return result

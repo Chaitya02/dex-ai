@@ -220,3 +220,21 @@ def test_strip_numbers_offsets_boxes_into_photo_coordinates(monkeypatch):
     assert len(seen) > 1
     assert all(b["w"] == W and b["h"] == H and b["x1"] >= 92 for b in boxes)
     assert sorted({b["y1"] for b in boxes}) == sorted(b["y1"] for b in boxes)
+
+
+def test_ambiguous_alignment_places_nothing():
+    """Captured from a real run: Muse Spark Open's positions stretched and low,
+    strips adding header rows; the best alignment put 9 items a line out and
+    beat the right one by 0.1 of a line. Now nothing is placed (the list
+    still shows every item)."""
+    import json
+    from pathlib import Path
+    d = json.loads((Path(__file__).parent / "fixtures" / "ambiguous_placement.json").read_text())
+    paper = {**max(d["papers"], key=lambda p: (p["x2"] - p["x1"]) * (p["y2"] - p["y1"])), "w": 620, "h": 1062}
+    out = locate.place(d["receipt"], paper, locate.dedupe(d["numbers"]))
+    assert out["margin"] < locate.MIN_MARGIN and out["items"] == {}
+
+
+def test_clear_alignment_reports_its_margin():
+    out = locate.place(receipt(ys(ITEM_CY), ys(FOOTER_CY)), PAPER, numbers(extra=(150,)))
+    assert out["margin"] >= locate.MIN_MARGIN and len(out["items"]) == 6

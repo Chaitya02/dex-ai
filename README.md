@@ -52,6 +52,33 @@ macOS voices through the whole voice pipeline. It reports the failures that
 cost money separately (an item placed on the wrong line, an item put on the
 wrong person) from the safe ones (left for the user to fill in).
 
+## Muse Spark Open (open weights, on Baseten)
+
+The same pipeline runs on Meta's open-weight Muse Spark Open with one setting,
+`DEX_PROVIDER=baseten` (model `meta-models/muse-spark-open-1026`). Same eval
+suite, same day ([REPORT.md](evals/REPORT.md) and
+[REPORT-baseten.md](evals/REPORT-baseten.md)):
+
+| | Muse Spark 1.3 (Meta Model API) | Muse Spark Open (Baseten, reasoning low) |
+|---|---|---|
+| Receipts read perfectly | 13 / 13 | 13 / 13 |
+| Reading time, p50 / p95 | 14.0s / 16.4s | **6.7s / 10.1s** |
+| Items placed on the right line | 100% | 91.9% (8.1% left unplaced) |
+| Items placed on the wrong line | 0% | 0% |
+| Typed cases, exact split | 20 / 20 | 19 / 20 |
+| Spoken cases, exact split | 5 / 6 | 4 / 6 |
+| Items put on the wrong person | 0% | 0% |
+| Agent time, p50 | 5.2s | **2.3s** |
+
+Muse Spark Open reasons before it answers; at its default it spent ~4,000
+reasoning tokens (18.6s) on one receipt, at `low` ~1,000 (7.2s) with the same
+answer, so Dex sends `reasoning_effort=low` to Baseten. Its rough line
+positions are looser than Muse Spark 1.3's, which is why placement declines
+more often: when the photo doesn't settle which line is which by a clear
+margin, Dex places nothing rather than risk a band on the wrong line. Its
+misses elsewhere are the safe kind too: items left open, never put on the
+wrong person.
+
 ## Reliability and safety
 
 - **Bounded runs:** every model call has a timeout (30s, 45s for photos) and at
@@ -74,3 +101,6 @@ wrong person) from the safe ones (left for the user to fill in).
 | `meta` | Meta Model API | `muse-spark-1.3` |
 | `baseten` | Baseten | `meta-models/muse-spark-open-1026` |
 | `fireworks` | Fireworks | set `DEX_MODEL` |
+
+`DEX_REASONING_EFFORT` (none / low / medium / high) overrides the reasoning
+effort sent to the model; Baseten defaults to `low`.

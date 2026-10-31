@@ -135,7 +135,7 @@ def run_reading(case: dict) -> dict:
             right += 1
         else:
             wrong += 1
-    out.update(placed_right=right, placed_wrong=wrong, placed_missed=missed)
+    out.update(placed_right=right, placed_wrong=wrong, placed_missed=missed, margin=placed.get("margin"))
     return out
 
 
@@ -247,7 +247,8 @@ def summarize(results: dict) -> dict:
 
 def write_report(summary: dict, results: dict, meta: dict) -> str:
     lines = [f"# Dex eval report", "",
-             f"Run {meta['at']} · model `{meta['model']}` on `{meta['provider']}` · "
+             f"Run {meta['at']} · model `{meta['model']}` on `{meta['provider']}`"
+             f"{' (reasoning ' + meta['effort'] + ')' if meta.get('effort') else ''} · "
              f"SAM `{locate.MODEL}` · voice `{voice.MODEL}`", "",
              "Regenerate with `uv run python -m evals.run`. Synthetic receipts are seeded, so the set is "
              "identical every run; the cases are in `evals/cases.py`.", ""]
@@ -312,7 +313,8 @@ def main():
             by_id = {c["id"]: c for c in C.CASES}
             results["voice"] = list(pool.map(lambda cv: run_voice(by_id[cv[0]], cv[1]), C.VOICE))
             print(f"voice: {len(results['voice'])} cases", file=sys.stderr)
-    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "provider": config.provider, "model": config.model}
+    meta = {"at": time.strftime("%Y-%m-%d %H:%M"), "provider": config.provider, "model": config.model,
+            "effort": config.reasoning_effort}
     summary = summarize(results)
     RESULTS.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
@@ -320,8 +322,9 @@ def main():
     (RESULTS / f"{stamp}-{config.provider}.json").write_text(
         json.dumps({"meta": meta, "summary": summary, "results": results}, indent=1, default=str))
     report = write_report(summary, results, meta)
-    if not args.only or set(args.only.split(",")) == {"reading", "assign", "voice"}:
-        REPORT.write_text(report)
+    if set(args.only.split(",")) == {"reading", "assign", "voice"}:
+        target = REPORT if config.provider == llm.DEFAULT_PROVIDER else REPORT.with_name(f"REPORT-{config.provider}.md")
+        target.write_text(report)
     print(report)
 
 

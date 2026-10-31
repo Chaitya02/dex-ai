@@ -263,3 +263,5 @@ select {
 .bd-save h3 { margin: 0 0 10px; font-size: 15px; }
 .bd-save .field input { width: 220px; }
 .bd-save .primary { margin-top: 10px; }
+
+.powered { margin-top: 24px; text-align: center; font-size: 12px; color: var(--muted); }

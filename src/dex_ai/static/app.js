@@ -635,3 +635,19 @@ $("bd-save-btn").addEventListener("click", async () => {
 });
 
 loadBalanceDesk();
+
+// ---- Which Meta models are serving this page ----
+const MODEL_NAMES = {
+  "muse-spark-1.3": "Muse Spark 1.3",
+  "meta-models/muse-spark-open-1026": "Muse Spark Open",
+};
+const HOSTS = { meta: "Meta Model API", baseten: "Baseten", fireworks: "Fireworks" };
+(async () => {
+  try {
+    const h = await (await fetch("/health")).json();
+    if (!h.llm || h.llm.error) return;
+    const model = MODEL_NAMES[h.llm.model] || h.llm.model;
+    $("powered").textContent = `${model} on ${HOSTS[h.llm.provider] || h.llm.provider} · ` +
+      "Muse Voice Transcribe · SAM 3.1";
+  } catch { /* the footer is decoration */ }
+})();
