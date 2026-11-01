@@ -16,7 +16,7 @@ Four parts, each scored against known answers:
   voice      a few cases spoken by macOS voices, transcribed with Muse Voice
              Transcribe, then through the agent: the whole spoken pipeline.
 
-Results go to evals/results/<time>.json, and evals/REPORT.md is rewritten
+Results go to evals/results/<time>.json, and evals/REPORT-<provider>.md is rewritten
 with the latest numbers. A change to a prompt or model ships only if these
 don't get worse.
 """
@@ -43,7 +43,7 @@ from evals import cases as C  # noqa: E402
 from evals.synth import generate  # noqa: E402
 
 RESULTS = ROOT / "evals" / "results"
-REPORT = ROOT / "evals" / "REPORT.md"
+REPORTS = ROOT / "evals"
 WORKERS = 4
 telemetry.log.disabled = True     # the per-request log lines would drown the report
 
@@ -323,8 +323,7 @@ def main():
         json.dumps({"meta": meta, "summary": summary, "results": results}, indent=1, default=str))
     report = write_report(summary, results, meta)
     if set(args.only.split(",")) == {"reading", "assign", "voice"}:
-        target = REPORT if config.provider == llm.DEFAULT_PROVIDER else REPORT.with_name(f"REPORT-{config.provider}.md")
-        target.write_text(report)
+        (REPORTS / f"REPORT-{config.provider}.md").write_text(report)
     print(report)
 
 

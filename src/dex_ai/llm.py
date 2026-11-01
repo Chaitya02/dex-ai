@@ -34,7 +34,10 @@ PROVIDERS = {
     ),
     "fireworks": ("https://api.fireworks.ai/inference/v1", "FIREWORKS_API_KEY", None),
 }
-DEFAULT_PROVIDER = "meta"
+# Muse Spark Open on Baseten by default: the same eval results as Muse Spark
+# 1.3 on everything that costs money, at about half the latency
+# (evals/REPORT-baseten.md vs evals/REPORT-meta.md).
+DEFAULT_PROVIDER = "baseten"
 # Reasoning effort sent by default, per host (None: don't send the parameter).
 DEFAULT_EFFORT = {"baseten": "low"}
 EFFORTS = ("none", "low", "medium", "high")

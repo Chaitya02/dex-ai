@@ -13,10 +13,11 @@ def clean_env(monkeypatch):
         monkeypatch.delenv(name, raising=False)
 
 
-def test_health_defaults_to_meta():
+def test_health_defaults_to_muse_spark_open():
     body = client.get("/health").json()
     assert body["status"] == "ok"
-    assert body["llm"] == {"provider": "meta", "model": "muse-spark-1.3", "key_set": False}
+    assert body["llm"] == {"provider": "baseten", "model": "meta-models/muse-spark-open-1026",
+                           "key_set": False}
 
 
 def test_health_reports_bad_provider(monkeypatch):
@@ -27,7 +28,7 @@ def test_health_reports_bad_provider(monkeypatch):
 def test_chat_without_key_is_503():
     resp = client.post("/chat", json={"message": "hi"})
     assert resp.status_code == 503
-    assert "MODEL_API_KEY" in resp.json()["detail"]
+    assert "BASETEN_API_KEY" in resp.json()["detail"]
 
 
 def test_chat_returns_model_reply(monkeypatch):

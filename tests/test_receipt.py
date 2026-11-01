@@ -102,3 +102,16 @@ def test_priced_lines_kept_only_when_they_match_the_items():
     # Two items on the receipt but one item line: unusable, so dropped.
     assert receipt.normalize({**RAW, "items": RAW["items"][:2], "priced_lines": lines})["lines"] == []
     assert receipt.normalize({**one_item, "priced_lines": [{"kind": "item", "amount": 1, "y": "?"}]})["lines"] == []
+
+
+@pytest.mark.parametrize("raw, iso", [
+    ("2026-10-24", "2026-10-24"),
+    ("10/24/2026 8:14 PM", "2026-10-24"),
+    ("10/22/26 13:02", "2026-10-22"),
+    ("Oct 24, 2026", "2026-10-24"),
+    ("24 Oct 2026", "2026-10-24"),
+    ("Table 7", None),
+    (None, None),
+])
+def test_dates_become_iso(raw, iso):
+    assert receipt.iso_date(raw) == iso

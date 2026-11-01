@@ -7,6 +7,7 @@ doesn't add up is returned as a check the user sees, never silently fixed.
 import base64
 import json
 import re
+from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from dex_ai import llm, telemetry
@@ -139,6 +140,31 @@ def priced_lines(raw: dict, n_items: int) -> list[dict]:
     return lines
 
 
+DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%d %b %Y", "%b %d %Y",
+                "%b %d, %Y", "%Y/%m/%d")
+
+
+def iso_date(text) -> str | None:
+    """A receipt date as YYYY-MM-DD, or None if it can't be read.
+
+    The schema asks for YYYY-MM-DD, but Muse Spark Open sometimes copies the
+    date as printed ("10/24/2026 8:14 PM"); Balance Desk only takes ISO dates.
+    US order is assumed for slashes, as on US receipts.
+    """
+    if not text:
+        return None
+    text = clean_text(text)
+    # Drop a trailing time ("8:14 PM", "13:02").
+    candidate = re.sub(r"\s+\d{1,2}:\d{2}(:\d{2})?(\s*[AaPp][Mm])?.*$", "", text).strip()
+    for fmt in DATE_FORMATS:
+        try:
+            parsed = datetime.strptime(candidate, fmt).date()
+        except ValueError:
+            continue
+        return parsed.isoformat() if date(2000, 1, 1) <= parsed <= date(2100, 1, 1) else None
+    return None
+
+
 def _position(y) -> int | None:
     """A 0–1000 vertical position from the model, or None if it's unusable."""
     try:
@@ -170,7 +196,7 @@ def normalize(raw: dict) -> dict:
     ]
     receipt = {
         "merchant": clean_text(raw.get("merchant")),
-        "date": clean_text(raw.get("date")),
+        "date": iso_date(raw.get("date")),
         "currency": raw.get("currency") or "USD",
         "items": items,
         "subtotal_cents": to_cents(raw.get("subtotal")),

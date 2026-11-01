@@ -27,7 +27,7 @@ not part of this submission.
 Requires [uv](https://docs.astral.sh/uv/) and Python 3.14.
 
 ```bash
-cp .env.example .env    # then set MODEL_API_KEY
+cp .env.example .env    # then set BASETEN_API_KEY and MODEL_API_KEY
 uv sync
 uv run dex-ai           # app at http://127.0.0.1:8000, API docs at /docs
 ```
@@ -45,7 +45,7 @@ Run the tests with `uv run pytest`.
 ## Evals
 
 `uv run python -m evals.run` scores every stage against known answers and
-rewrites [evals/REPORT.md](evals/REPORT.md): 12 seeded synthetic receipts plus a
+rewrites `evals/REPORT-<provider>.md`: 12 seeded synthetic receipts plus a
 real phone photo for reading and placement, 20 who-had-what cases (corrections,
 weights, new people, ambiguity, mixed Hindi-English), and 6 cases spoken by
 macOS voices through the whole voice pipeline. It reports the failures that
@@ -54,10 +54,11 @@ wrong person) from the safe ones (left for the user to fill in).
 
 ## Muse Spark Open (open weights, on Baseten)
 
-The same pipeline runs on Meta's open-weight Muse Spark Open with one setting,
-`DEX_PROVIDER=baseten` (model `meta-models/muse-spark-open-1026`). Same eval
-suite, same day ([REPORT.md](evals/REPORT.md) and
-[REPORT-baseten.md](evals/REPORT-baseten.md)):
+Dex runs on Meta's open-weight Muse Spark Open by default
+(`DEX_PROVIDER=baseten`, model `meta-models/muse-spark-open-1026`); Muse Spark
+1.3 on Meta Model API is one setting away (`DEX_PROVIDER=meta`). Same eval
+suite, same day ([REPORT-baseten.md](evals/REPORT-baseten.md) and
+[REPORT-meta.md](evals/REPORT-meta.md)):
 
 | | Muse Spark 1.3 (Meta Model API) | Muse Spark Open (Baseten, reasoning low) |
 |---|---|---|
