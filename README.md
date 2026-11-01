@@ -42,6 +42,13 @@ spoken assignment generated with macOS `say`.
 
 Run the tests with `uv run pytest`.
 
+## Deploy
+
+`render.yaml` deploys the Docker image to Render as a web service. Set
+`BASETEN_API_KEY` and `MODEL_API_KEY` in the dashboard. A public URL turns on
+per-visitor rate limits and a daily cap on receipt reads (`DEX_LIMITS=1`), and
+leaves the Balance Desk link unset so visitors can't save into anyone's account.
+
 ## Evals
 
 `uv run python -m evals.run` scores every stage against known answers and

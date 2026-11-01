@@ -6,23 +6,18 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, assign, balancedesk, llm, locate, receipt, split, telemetry, voice
+from dex_ai import __version__, assign, balancedesk, limits, llm, locate, receipt, split, telemetry, voice
 
 load_dotenv()
 
 STATIC_DIR = Path(__file__).parent / "static"
 MAX_TRANSCRIPT = 2000   # characters; a spoken split is a few sentences
-
-SYSTEM_PROMPT = (
-    "You are Dex, an expense companion for students and roommates who share "
-    "costs. Be brief and concrete."
-)
 
 app = FastAPI(title="Dex", version=__version__)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -31,16 +26,6 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
-
-
-class ChatRequest(BaseModel):
-    message: str
-
-
-class ChatResponse(BaseModel):
-    reply: str
-    provider: str
-    model: str
 
 
 @app.get("/health")
@@ -61,24 +46,6 @@ def health() -> dict:
     }
 
 
-@app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
-    try:
-        config = llm.config_from_env()
-        reply = llm.chat(
-            [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": req.message},
-            ],
-            config,
-        )
-    except llm.LLMConfigError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except llm.LLMUnavailable as e:
-        raise HTTPException(status_code=e.status, detail=str(e))
-    return ChatResponse(reply=reply, provider=config.provider, model=config.model)
-
-
 @app.get("/api/metrics")
 def metrics() -> dict:
     """Latency percentiles and error counts per route over recent requests."""
@@ -86,8 +53,9 @@ def metrics() -> dict:
 
 
 @app.post("/api/receipts/parse")
-async def parse_receipt(image: UploadFile = File(...)) -> dict:
+async def parse_receipt(request: Request, image: UploadFile = File(...)) -> dict:
     """Receipt photo -> line items, tax, tip, total in cents, plus arithmetic checks."""
+    limits.check(request, "receipt")
     data = await image.read()
     # The model call blocks, so it runs on a worker thread, not the event loop.
     return await run_in_threadpool(_parse_receipt, data)
@@ -106,8 +74,10 @@ def _parse_receipt(data: bytes) -> dict:
 
 
 @app.post("/api/receipts/locate")
-async def locate_items(image: UploadFile = File(...), receipt_json: str = Form(..., alias="receipt")) -> dict:
+async def locate_items(request: Request, image: UploadFile = File(...),
+                       receipt_json: str = Form(..., alias="receipt")) -> dict:
     """Receipt photo + its parsed items -> each item's box on the photo (SAM 3.1)."""
+    limits.check(request, "locate")
     data = await image.read()
     try:
         parsed = json.loads(receipt_json)
@@ -155,8 +125,9 @@ def _assignments(items: list[ItemAssignment]) -> list[split.Assignment]:
 
 
 @app.post("/api/split")
-def split_receipt(req: SplitRequest) -> dict:
+def split_receipt(req: SplitRequest, request: Request) -> dict:
     """Receipt + who had which item -> each person's share and who owes whom."""
+    limits.check(request, "split")
     try:
         return split.split(req.receipt, _assignments(req.assignments), req.payer.strip() or "me", req.tax_tip)
     except (split.SplitError, KeyError, TypeError) as e:
@@ -182,13 +153,14 @@ class SaveRequest(SplitRequest):
 
 
 @app.post("/api/balancedesk/save")
-def save_to_balance_desk(req: SaveRequest) -> dict:
+def save_to_balance_desk(req: SaveRequest, request: Request) -> dict:
     """Write an approved split to Balance Desk as one expense with exact shares.
 
     The split is recomputed here from the receipt and assignments rather than
     taken from the page, so what's saved is what split.py says, to the cent.
     The page's idempotency key makes a retry or double tap save once.
     """
+    limits.check(request, "save")
     try:
         result = split.split(req.receipt, _assignments(req.assignments), req.payer.strip() or "me", req.tax_tip)
     except (split.SplitError, KeyError, TypeError) as e:
@@ -221,8 +193,9 @@ class AssignRequest(BaseModel):
 
 
 @app.post("/api/assign")
-def assign_items(req: AssignRequest) -> dict:
+def assign_items(req: AssignRequest, request: Request) -> dict:
     """Transcript -> item assignments, through the Muse Spark tool-calling agent."""
+    limits.check(request, "assign")
     if not req.transcript.strip():
         raise HTTPException(status_code=400, detail="Say who had what first")
     if len(req.transcript) > MAX_TRANSCRIPT:
@@ -245,13 +218,14 @@ def assign_items(req: AssignRequest) -> dict:
 
 
 @app.post("/api/voice/transcribe")
-async def transcribe(audio: UploadFile = File(...), keywords: str = Form("")) -> dict:
+async def transcribe(request: Request, audio: UploadFile = File(...), keywords: str = Form("")) -> dict:
     """WAV recording (mono 16-bit, 16 kHz) -> transcript.
 
     `keywords` is a comma-separated list (people's names, the receipt's item
     names) that biases recognition; without it "Aayush and Ketan" comes back
     as "I and Caton".
     """
+    limits.check(request, "transcribe")
     data = await audio.read()
     hints = [k.strip()[:60] for k in keywords.split(",") if k.strip()][:100]
     return await run_in_threadpool(_transcribe, data, hints)

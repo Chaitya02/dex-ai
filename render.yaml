@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: dex-ai
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Muse Spark Open on Baseten for reading and the agent; Meta Model API
+      # for Muse Voice Transcribe and SAM 3.1. Keys are set in the dashboard.
+      - key: DEX_PROVIDER
+        value: baseten
+      - key: BASETEN_API_KEY
+        sync: false
+      - key: MODEL_API_KEY
+        sync: false
+      # A public URL: per-visitor rate limits and a daily cap on receipt reads,
+      # with the visitor's address taken from Render's proxy header.
+      - key: DEX_LIMITS
+        value: "1"
+      - key: DEX_TRUST_PROXY
+        value: "1"
+      - key: DEX_DAILY_RECEIPTS
+        value: "300"
+      # BALANCE_DESK_URL / BALANCE_DESK_TOKEN are deliberately not set here:
+      # on a public demo anyone could save into the owner's Balance Desk.
