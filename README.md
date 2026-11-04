@@ -18,8 +18,7 @@ visit after a quiet spell takes 30–60s to wake. Use your own receipt or
 
 ## What it does
 
-1. **Snap the bill.** Dex reads every line: items, quantities, discounts
-   (including Costco-style "4.00-" instant savings), tax, tip and total, and
+1. **Snap the bill.** Dex reads every line: items, quantities, discounts, tax, tip and total, and
    checks that the numbers add up.
 2. **Say who had what.** Hold the mic or type, the way you'd tell a friend:
    *"I had the pasta, Aayush and Ketan split the pizza, we all shared the
