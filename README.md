@@ -6,21 +6,30 @@ costs, built on Meta's models for the
 (Oct 26 – Nov 4, 2026).
 
 **Split it, out loud:** photograph a group bill, say who had what, and Dex
-splits it item by item and writes it to Balance Desk once you approve. See
-[docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
+splits it item by item, shows it on your photo, and (once you approve) writes
+it to Balance Desk.
+
+**Try it:** https://dex-ai-vl0t.onrender.com (free instance: the first visit
+after a quiet spell takes ~30–60s to wake). Use your own receipt or
+[samples/luigis.png](samples/luigis.png).
 
 | Meta model | Job |
 |---|---|
-| `muse-spark-1.3` | Reads the receipt photo into line items (vision + JSON schema) |
-| `muse-voice-transcribe-1.0` | Transcribes who-had-what, biased toward people's and items' names |
+| Muse Spark Open (`meta-models/muse-spark-open-1026`, on Baseten) | Reads the receipt photo into line items (vision + JSON schema), and runs the tool-calling agent that turns speech into who-had-what |
+| `muse-voice-transcribe-1.0` | Transcribes who-had-what, biased toward the people's and items' names |
 | `sam-3.1` | Finds the receipt and every printed number; Dex turns those into each item's band on your photo |
+| `muse-spark-1.3` | The same reading and agent on Meta Model API, one setting away (`DEX_PROVIDER=meta`) |
+
+How it works: [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md). How well: [evals](#evals).
 
 ## Built during the hackathon
 
 Everything in this repository was written during the hackathon, starting
 Oct 26, 2026. Dex connects to [Balance Desk](https://balance-desk.chaityadobariya.me),
 my pre-existing, private expense app, over its API; Balance Desk's own code is
-not part of this submission.
+not part of this submission. The one change made to Balance Desk during the
+event is that API: a token-protected `/api/link/v1` with an idempotency key on
+every write, so a retried save can never double-book an expense.
 
 ## Run locally
 

@@ -17,3 +17,6 @@ samples/private/
 
 # Raw eval runs (the summary is evals/REPORT.md)
 evals/results/
+
+# Submission drafts (personal answers)
+submission/
