@@ -10,7 +10,7 @@ Built on Meta's models for the
 
 **Try it:** https://dex-ai-vl0t.onrender.com. It's a free instance, so the first
 visit after a quiet spell takes 30–60s to wake. Use your own receipt or
-[samples/luigis.png](samples/luigis.png).
+[samples/luigis-receipt.png](samples/luigis-receipt.png).
 
 ![Dex: the receipt, the chat with Dex, and the split beside it](docs/screenshot.png)
 
@@ -33,27 +33,9 @@ visit after a quiet spell takes 30–60s to wake. Use your own receipt or
 
 ## How it works
 
-```mermaid
-flowchart TD
-    A(["📷 Receipt photo"]) --> B["Enlarge if small<br/><sub>long side under 1600px: 2x</sub>"]
-    B --> C["<b>Muse Spark Open</b> reads the receipt<br/><sub>vision + strict JSON schema: items, discounts, tax, tip, total,<br/>and every amount-ending line with its rough position</sub>"]
-    C --> D{"Do the sums<br/>add up?"}
-    D -- no --> E["Read once more,<br/>more carefully"] --> F
-    D -- yes --> F["Fold item discounts into their items<br/><sub>Costco: SALAME 13.99 and its 4.00- savings line become one 9.99 item</sub>"]
-    F --> G["<b>SAM 3.1</b> finds the paper and every printed number<br/><sub>in strips when the text is small</sub>"]
-    G --> H["Group numbers into price rows,<br/>align them to the reader's lines in order<br/><sub>tilt- and drift-corrected, nothing drawn if ambiguous</sub>"]
+![How Dex adds a shared bill: read the receipt and check the sums, transcribe what you said, decide who had what with checked tools, split to the cent, preview, then save to Balance Dex](docs/workflow.png)
 
-    V(["🎙 Voice or text"]) --> W["<b>Muse Voice Transcribe</b><br/><sub>people and item names as hints</sub>"]
-    W --> X["<b>Muse Spark Open agent</b><br/><sub>tool loop, every call validated in code</sub>"]
-    F --> X
-    X --> Y["split.py: shares to the cent<br/><sub>tax and tip by what each person had,<br/>largest-remainder rounding</sub>"]
-    Y --> Z["Preview: who owes what,<br/>and the bands on your photo"]
-    H --> Z
-    Z --> AP{"Looks right?"}
-    AP -- "fix by voice or tap" --> X
-    AP -- approve --> S["Balance Dex link API<br/><sub>one expense, exact shares,<br/>an idempotency key, so it is saved once</sub>"]
-    S --> L(["📒 Expense log"])
-```
+<sub>Drawn by [`scripts/draw_workflow.py`](scripts/draw_workflow.py).</sub>
 
 ### The agent: the model decides, the code does the work
 
@@ -108,7 +90,7 @@ log.
 | [`src/dex_ai/receipt.py`](src/dex_ai/receipt.py) | Reads the photo: upscaling, the JSON schema, discount folding, sum checks, the re-read |
 | [`src/dex_ai/locate.py`](src/dex_ai/locate.py) | SAM 3.1 placement: number rows, strips, tilt, order-preserving alignment, the ambiguity guard |
 | [`src/dex_ai/voice.py`](src/dex_ai/voice.py) | Muse Voice Transcribe |
-| [`src/dex_ai/assign.py`](src/dex_ai/assign.py) | The tool-calling agent and its six validated tools |
+| [`src/dex_ai/agent.py`](src/dex_ai/agent.py) | The tool-calling agent and its six validated tools |
 | [`src/dex_ai/split.py`](src/dex_ai/split.py) | The split, in integer cents |
 | [`src/dex_ai/balancedesk.py`](src/dex_ai/balancedesk.py) | Saving to Balance Dex, idempotent with a safe retry |
 | [`src/dex_ai/llm.py`](src/dex_ai/llm.py) | One OpenAI-compatible client for Baseten, Meta Model API and Fireworks |
@@ -137,7 +119,7 @@ uv sync
 uv run dex-ai               # http://127.0.0.1:8000 (API docs at /docs)
 ```
 
-Open http://127.0.0.1:8000, choose [samples/luigis.png](samples/luigis.png),
+Open http://127.0.0.1:8000, choose [samples/luigis-receipt.png](samples/luigis-receipt.png),
 and type or say who had what.
 
 ### 3. Settings (`.env`)
@@ -175,8 +157,8 @@ leaves the Balance Dex link unset, so visitors can't save into anyone's account.
 ## How well it works
 
 `uv run python -m evals.run` scores every stage against known answers and
-writes [evals/REPORT-baseten.md](evals/REPORT-baseten.md) (and
-[REPORT-meta.md](evals/REPORT-meta.md) for Muse Spark 1.3). The set is 12
+writes [evals/reports/baseten.md](evals/reports/baseten.md) (and
+[meta.md](evals/reports/meta.md) for Muse Spark 1.3). The set is 12
 seeded synthetic receipts plus a real phone photo; 20 typed who-had-what cases
 (corrections, portions, new people, ambiguity, mixed Hindi-English); and 6 cases
 spoken by US, UK and Indian-English voices through the whole voice pipeline.
@@ -185,23 +167,36 @@ wrong person) are reported apart from safe ones (left for you to fill in).
 
 | | Muse Spark Open (Baseten, default) | Muse Spark 1.3 (Meta Model API) |
 |---|---|---|
-| Receipts read perfectly | **13 / 13** | 13 / 13 |
-| Reading time, p50 / p95 | 10.4s / 13.5s | 14.0s / 16.4s |
-| Items on the right line of the photo | 91.9% (8.1% shown in the list only) | 100% |
+| Receipts read perfectly | **15 / 15** (12 synthetic + 3 real) | 13 / 13 (synthetic + ALDI) |
+| Reading time, p50 / p95 | 10.8s / 15.2s | 14.0s / 16.4s |
+| Items on the right line of the photo | 82.4% (17.6% shown in the list only) | 100% |
 | Items on the **wrong** line | **0%** | **0%** |
-| Typed cases, exact split | 18 / 20 (both misses: left open, no question asked) | 20 / 20 |
+| Typed cases, exact split | 22 / 23 (the miss: left open, no question asked) | 20 / 20 |
 | Spoken cases, exact split | 5 / 6 (misheard "Arya paid" as "I paid") | 5 / 6 |
 | Items put on the **wrong person** | **0%** | **0%** |
 | Agent reply, p50 | **2.3s** | 5.2s |
 
-Muse Spark Open: Nov 4, after the last change to the reader. Muse Spark 1.3:
-Oct 31. Muse Spark Open runs at `reasoning_effort=low`: at its default it spent
-~4,000 reasoning tokens (18.6s) on one receipt; at `low`, ~1,000 (7.2s) with
-the same answer.
+Muse Spark Open: Nov 4, the full set including the real bills. Muse Spark 1.3:
+Oct 31, before the real bills were added. Muse Spark Open runs at
+`reasoning_effort=low`: at its default it spent ~4,000 reasoning tokens (18.6s)
+on one receipt; at `low`, ~1,000 (7.2s) with the same answer.
 
-Real receipts tested along the way: an ALDI phone photo (tilted, curled, product
-codes, a card-payment block) and a WhatsApp-compressed Costco receipt (31 items,
-instant savings, a shadow), both read exactly.
+### My own bills from the hackathon week
+
+The set includes the receipts I actually split during the event, as phone
+photos. They stay out of the repo (`samples/private/`, gitignored) because they
+show card digits and a member number; each has a hand-checked `*.truth.json`
+next to it, and the eval picks up any receipt dropped there.
+
+| Bill | What makes it hard | Read exactly | Who had what, exact split |
+|---|---|---|---|
+| ALDI, Oct 22 | tilted and curled, product codes, a card-payment block | yes, 4 / 4 items | |
+| Ajisen Ramen, Oct 31 (dinner for five) | a "table of 4" service charge on top of tax | yes, 5 / 5 | yes: the split, and a correction ("Dwiti had the melon soda, not Arya, and Charvi paid") |
+| Costco, Oct 31 | 31 items, "4.00-" instant savings lines, WhatsApp-compressed, a shadow | yes, 31 / 31 | yes: three roommates, 31 / 31 items |
+
+Placement on the photo is scored only on receipts with hand-measured line
+positions; the real photos placed fewer items (shown in the list instead) but
+none on a wrong line.
 
 ## Reliability and safety
 

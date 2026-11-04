@@ -16,7 +16,7 @@ Four parts, each scored against known answers:
   voice      a few cases spoken by macOS voices, transcribed with Muse Voice
              Transcribe, then through the agent: the whole spoken pipeline.
 
-Results go to evals/results/<time>.json, and evals/REPORT-<provider>.md is rewritten
+Results go to evals/results/<time>.json, and evals/reports/<provider>.md is rewritten
 with the latest numbers. A change to a prompt or model ships only if these
 don't get worse.
 """
@@ -38,12 +38,12 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
 
-from dex_ai import assign, llm, locate, receipt, telemetry, voice  # noqa: E402
+from dex_ai import agent, llm, locate, receipt, telemetry, voice  # noqa: E402
 from evals import cases as C  # noqa: E402
 from evals.synth import generate  # noqa: E402
 
 RESULTS = ROOT / "evals" / "results"
-REPORTS = ROOT / "evals"
+REPORTS = ROOT / "evals" / "reports"
 WORKERS = 4
 telemetry.log.disabled = True     # the per-request log lines would drown the report
 
@@ -115,7 +115,10 @@ def run_reading(case: dict) -> dict:
         "missing": [t["name"] for t, m in pairs if not m],
         "extra": [x["name"] for x in r["items"] if x not in [m for _, m in pairs]],
     }
-    # Placement, on the reader's own output, scored against where the truth's prices are.
+    # Placement, on the reader's own output, scored against where the truth's
+    # prices are: only for receipts whose truth records those positions.
+    if not all("price_y" in t for t in truth["items"]) or "line_height" not in truth:
+        return out
     t1 = time.perf_counter()
     try:
         placed = locate.locate(r, case["image"], case["mime"])
@@ -150,18 +153,21 @@ def _ratio(weights: dict) -> dict:
 
 def score_assign(case: dict, out: dict) -> dict:
     items = {i["id"]: i["name"] for i in case["receipt"]["items"]}
-    got = {items[a["item_id"]]: _ratio(a["weights"]) for a in out["assignments"]}
-    want = {name: _ratio(w) for name, w in case["expect"].items()}
-    wrong_items = sorted({n for n in set(got) | set(want) if got.get(n) != want.get(n)})
+    # By item id, so each of three identical "DAHI YOGURT" lines is checked.
+    got_ids = {a["item_id"]: _ratio(a["weights"]) for a in out["assignments"]}
+    want_ids = {i: _ratio(case["expect"][n]) for i, n in items.items() if n in case["expect"]}
+    wrong_ids = sorted(i for i in set(got_ids) | set(want_ids) if got_ids.get(i) != want_ids.get(i))
+    wrong_items = [f"{items[i]} (#{i})" for i in wrong_ids]
+    got = {f"{items[i]} (#{i})": g for i, g in got_ids.items()}
     # Left unassigned when it shouldn't be is a safe miss (the page asks "Who
     # had this?"); assigned to the wrong people is the failure that costs money.
-    missed_items = [n for n in wrong_items if n not in got]
-    misassigned = [n for n in wrong_items if n in got]
+    missed_items = [n for i, n in zip(wrong_ids, wrong_items) if i not in got_ids]
+    misassigned = [n for i, n in zip(wrong_ids, wrong_items) if i in got_ids]
     payer_ok = out["payer"] == case.get("payer", "me")
     tax_ok = out["tax_tip"] == case.get("tax_tip", "proportional")
     asked_ok = all(n not in got for n in case.get("ask", [])) and (not case.get("ask") or bool(out["questions"]))
     return {
-        "id": case["id"], "pass": not wrong_items and payer_ok and tax_ok and asked_ok,
+        "id": case["id"], "real": case.get("real", False), "pass": not wrong_items and payer_ok and tax_ok and asked_ok,
         "items_total": len(items), "items_wrong": len(wrong_items), "wrong": wrong_items,
         "items_missed": len(missed_items), "items_misassigned": len(misassigned),
         "payer_ok": payer_ok, "tax_tip_ok": tax_ok, "asked_ok": asked_ok,
@@ -173,10 +179,10 @@ def score_assign(case: dict, out: dict) -> dict:
 def run_assign(case: dict, transcript: str | None = None) -> dict:
     current = [{"item_id": next(i["id"] for i in case["receipt"]["items"] if i["name"] == name),
                 "weights": weights} for name, weights in case.get("current", {}).items()]
-    state = assign.new_state(case["receipt"], case["people"], current, contacts=C.CONTACTS)
+    state = agent.new_state(case["receipt"], case["people"], current, contacts=C.CONTACTS)
     t0 = time.perf_counter()
     try:
-        out = assign.run(state, transcript or case["said"], spoken=transcript is not None)
+        out = agent.run(state, transcript or case["said"], spoken=transcript is not None)
     except Exception as e:
         return {"id": case["id"], "pass": False, "error": f"{type(e).__name__}: {e}"}
     scored = score_assign(case, out)
@@ -212,6 +218,10 @@ def summarize(results: dict) -> dict:
     if "reading" in results:
         rows = [r for r in results["reading"] if "error" not in r]
         truth_items = sum(r["items_truth"] for r in rows)
+        real = [r for r in rows if r.get("real")]
+        s["real_bills"] = [{"id": r["id"].removeprefix("real-"), "perfect": r["perfect"],
+                            "items": f"{r['items_matched']}/{r['items_truth']}", "read_s": r["read_s"]}
+                           for r in real]
         s["reading"] = {
             "receipts": len(results["reading"]), "errors": len(results["reading"]) - len(rows),
             "item_recall": pct(sum(r["items_matched"] for r in rows), truth_items),
@@ -259,11 +269,21 @@ def write_report(summary: dict, results: dict, meta: dict) -> str:
                   "|---|---|---|---|---|---|---|",
                   f"| {r['receipts']} | {r['item_recall']}% | {r['item_precision']}% | {r['totals_exact']}% | "
                   f"{r['perfect_receipts']}% | {r['p50_s']}s | {r['p95_s']}s |", "",
+                  *(["### Real bills from the hackathon week", "",
+                     "| Bill | Read exactly | Items right | Time |", "|---|---|---|---|",
+                     *[f"| {b['id']} | {'yes' if b['perfect'] else 'no'} | {b['items']} | {b['read_s']}s |"
+                       for b in summary.get("real_bills", [])], ""] if summary.get("real_bills") else []),
                   "## Placing items on the photo (SAM 3.1)", "",
                   "| Items | Right line | Wrong line | Not placed | p50 | p95 |",
                   "|---|---|---|---|---|---|",
                   f"| {p['items']} | {p['right']}% | **{p['wrong']}%** | {p['missed']}% | {p['p50_s']}s | {p['p95_s']}s |",
                   "", "Wrong line is the failure that matters: an unplaced item still shows in the list.", ""]
+    if "assign" in results and any(r.get("real") for r in results["assign"]):
+        real = [r for r in results["assign"] if r.get("real")]
+        lines += ["### Who had what, on the real bills", "",
+                  "| Case | Exact split | Items right |", "|---|---|---|",
+                  *[f"| {r['id']} | {'yes' if r.get('pass') else 'no'} | "
+                    f"{r.get('items_total', 0) - r.get('items_wrong', 0)}/{r.get('items_total', 0)} |" for r in real], ""]
     for part, title in (("assign", "Who had what (assignment agent)"), ("voice", "Spoken, end to end (voice + agent)")):
         if part in summary:
             a = summary[part]
@@ -323,7 +343,7 @@ def main():
         json.dumps({"meta": meta, "summary": summary, "results": results}, indent=1, default=str))
     report = write_report(summary, results, meta)
     if set(args.only.split(",")) == {"reading", "assign", "voice"}:
-        (REPORTS / f"REPORT-{config.provider}.md").write_text(report)
+        (REPORTS / f"{config.provider}.md").write_text(report)
     print(report)
 
 

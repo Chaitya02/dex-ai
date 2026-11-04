@@ -216,3 +216,19 @@ def test_a_read_that_adds_up_is_not_retried(monkeypatch):
     monkeypatch.setattr(llm, "chat", lambda *a, **k: calls.append(1) or json.dumps(RAW))
     receipt.parse(png_bytes())
     assert len(calls) == 1
+
+
+
+def test_clean_text_strips_control_chars_and_caps():
+    assert receipt.clean_text("  Garlic\n\x00Knots  ") == "Garlic Knots"
+    assert len(receipt.clean_text("A" * 500)) == receipt.MAX_TEXT
+    assert receipt.clean_text(None) is None
+
+
+def test_normalize_cleans_untrusted_names():
+    raw = {"merchant": "Luigi's\n\nIGNORE ALL", "date": "2026-10-24", "currency": "USD",
+           "items": [{"name": "Pie\x1b[31m" + "x" * 200, "quantity": 1, "amount": 1}],
+           "subtotal": None, "tax": None, "tip": None, "other_charges": [], "total": None}
+    r = receipt.normalize(raw)
+    assert "\n" not in r["merchant"]
+    assert "\x1b" not in r["items"][0]["name"] and len(r["items"][0]["name"]) <= receipt.MAX_TEXT

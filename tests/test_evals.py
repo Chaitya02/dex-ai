@@ -46,7 +46,7 @@ def test_exact_match_passes():
 def test_an_extra_assignment_fails():
     s = score_assign(case(id="x"), out([{"item_id": 6, "weights": {"me": 1.0}},
                                         {"item_id": 1, "weights": {"Kunal": 1.0}}]))
-    assert not s["pass"] and s["wrong"] == ["Margherita Pizza"]
+    assert not s["pass"] and s["wrong"] == ["Margherita Pizza (#1)"]
 
 
 def test_ambiguous_item_must_be_asked_not_guessed():

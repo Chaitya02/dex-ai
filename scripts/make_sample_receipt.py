@@ -1,6 +1,6 @@
 """Render a synthetic restaurant receipt for testing the reader.
 
-    uv run python scripts/make_sample_receipt.py samples/luigis.png
+    uv run python scripts/make_sample_receipt.py samples/luigis-receipt.png
 """
 import sys
 
@@ -55,4 +55,4 @@ def render(path):
 
 
 if __name__ == "__main__":
-    render(sys.argv[1] if len(sys.argv) > 1 else "samples/luigis.png")
+    render(sys.argv[1] if len(sys.argv) > 1 else "samples/luigis-receipt.png")

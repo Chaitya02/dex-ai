@@ -113,6 +113,65 @@ CASES = [
      "expect": {"Tonkotsu Ramen": {"Arya": 1}, "Gyoza": {"me": 1, "Dwiti": 1}}},
 ]
 
+# ---- Real bills from the hackathon week (Oct 26 - Nov 4) ----
+# Receipts the builder actually split during the event, as Dex reads them
+# (the photos stay private: they show card digits). Cases on them are marked
+# real so the report lists them on their own.
+
+AJISEN = {
+    "merchant": "Ajisen Ramen chinatown", "date": "2026-10-31",
+    "items": [
+        {"id": 1, "name": "Sapporo", "quantity": 1, "amount_cents": 600},
+        {"id": 2, "name": "Melon Cream Soda", "quantity": 1, "amount_cents": 700},
+        {"id": 3, "name": "Tatsuga Age", "quantity": 1, "amount_cents": 1000},
+        {"id": 4, "name": "Shrimp Tempura", "quantity": 1, "amount_cents": 1000},
+        {"id": 5, "name": "Agedashi Tofu", "quantity": 1, "amount_cents": 800},
+    ],
+    "subtotal_cents": 4100, "tax_cents": 369, "tip_cents": None,
+    "other_charges": [{"name": "table of 4", "amount_cents": 738}], "total_cents": 5207,
+}
+
+_COSTCO_ITEMS = [
+    ("KSWTR40PK", 399), ("KSWTR40PK", 399), ("KS ORG A2 PR", 1449), ("DAHI YOGURT", 649),
+    ("DAHI YOGURT", 649), ("DAHI YOGURT", 649), ("2% MILK 1GAL", 409), ("RED ONIONS", 489),
+    ("POTATOES", 729), ("KS ORG CSHW", 1749), ("NOOR DATES", 899), ("SLCD SALAME", 999),
+    ("DOTS PRETZEL", 999), ("BLUEBERRIES", 749), ("MANDARINS", 269), ("GOLDESPRESSO", 1589),
+    ("MIXED PEPPER", 599), ("PALMIER 32OZ", 699), ("KS GRD PEPPR", 599), ("MANDARINS", 269),
+    ("BROCCRUNCH", 599), ("KS PANEER", 739), ("KS PANEER", 739), ("KS PANEER", 739),
+    ("STRAWBERRIES", 649), ("PINK PINEAPL", 499), ("BP 6PRBTSOCK", 799), ("ORG CUCUMBER", 599),
+    ("FRESH GARLIC", 599), ("PITA BREAD", 699), ("MUSHROOMS", 369),
+]
+COSTCO = {
+    "merchant": "Costco Wholesale", "date": "2026-10-31",
+    "items": [{"id": k + 1, "name": n, "quantity": 1, "amount_cents": c} for k, (n, c) in enumerate(_COSTCO_ITEMS)],
+    "subtotal_cents": 22269, "tax_cents": 0, "tip_cents": None, "other_charges": [], "total_cents": 22269,
+}
+_EVERYONE3 = {"me": 1, "Kunal": 1, "Aayush": 1}
+_MINE = {"DAHI YOGURT", "KS PANEER"}
+_ME_KUNAL = {"KSWTR40PK", "2% MILK 1GAL"}
+_AAYUSH = {"SLCD SALAME", "DOTS PRETZEL"}
+
+CASES_REAL = [
+    {"id": "ajisen-dinner", "real": True, "receipt": AJISEN, "people": ["Arya", "Dwiti", "Saumya", "Charvi"],
+     "said": "I had the Sapporo and the shrimp tempura, Arya had the melon soda, "
+             "and all five of us shared the tatsuta age and the agedashi tofu. I paid.",
+     "expect": {"Sapporo": {"me": 1}, "Shrimp Tempura": {"me": 1}, "Melon Cream Soda": {"Arya": 1},
+                "Tatsuga Age": {n: 1 for n in ["me", "Arya", "Dwiti", "Saumya", "Charvi"]},
+                "Agedashi Tofu": {n: 1 for n in ["me", "Arya", "Dwiti", "Saumya", "Charvi"]}}},
+    {"id": "ajisen-fix", "real": True, "receipt": AJISEN, "people": ["Arya", "Dwiti", "Saumya", "Charvi"],
+     "current": {"Sapporo": {"me": 1}, "Melon Cream Soda": {"Arya": 1}},
+     "said": "Actually Dwiti had the melon soda, not Arya, and Charvi paid.",
+     "expect": {"Sapporo": {"me": 1}, "Melon Cream Soda": {"Dwiti": 1}}, "payer": "Charvi"},
+    {"id": "costco-roommates", "real": True, "receipt": COSTCO, "people": ["Kunal", "Aayush"],
+     "said": "The dahi and the paneer were mine. Kunal and I split the water and the milk. "
+             "Aayush had the salame and the pretzels. Everything else the three of us shared.",
+     "expect": {i["name"]: ({"me": 1} if i["name"] in _MINE else {"me": 1, "Kunal": 1} if i["name"] in _ME_KUNAL
+                            else {"Aayush": 1} if i["name"] in _AAYUSH else _EVERYONE3)
+                for i in COSTCO["items"]}},
+]
+CASES += CASES_REAL
+
+
 # The user's contact list, as the app passes it from Balance Desk: the agent
 # and speech recognition both get it. Includes everyone the cases name.
 CONTACTS = ["Aayush", "Ketan", "Kunal", "Sousheel", "Chaitanya", "Arya", "Dwiti", "Anand", "Swanith", "Saumya"]

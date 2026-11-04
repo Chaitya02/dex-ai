@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, PositiveFloat
 
-from dex_ai import __version__, assign, balancedesk, limits, llm, locate, receipt, split, telemetry, voice
+from dex_ai import __version__, agent, balancedesk, limits, llm, locate, receipt, split, telemetry, voice
 
 load_dotenv()
 
@@ -202,7 +202,7 @@ def assign_items(req: AssignRequest, request: Request) -> dict:
         raise HTTPException(status_code=400, detail="That's too long; say it in a few sentences")
     if not req.receipt.get("items"):
         raise HTTPException(status_code=400, detail="Read a receipt first")
-    state = assign.new_state(
+    state = agent.new_state(
         req.receipt, req.people, [a.model_dump() for a in req.assignments],
         payer=req.payer, tax_tip=req.tax_tip, contacts=req.contacts,
     )
@@ -210,7 +210,7 @@ def assign_items(req: AssignRequest, request: Request) -> dict:
         with telemetry.turn("assign", items=len(state.items), people=len(state.people),
                             transcript_chars=len(req.transcript),
                             correction=bool(req.assignments)):
-            return assign.run(state, req.transcript, spoken=req.spoken)
+            return agent.run(state, req.transcript, spoken=req.spoken)
     except llm.LLMConfigError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except llm.LLMUnavailable as e:

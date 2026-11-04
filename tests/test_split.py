@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from dex_ai.app import app
 from dex_ai.split import Assignment, SplitError, allocate, split
 
-# The sample receipt (samples/luigis.png), normalized.
+# The sample receipt (samples/luigis-receipt.png), normalized.
 LUIGIS = {
     "items": [
         {"id": 1, "name": "Margherita Pizza", "quantity": 1, "amount_cents": 1850},

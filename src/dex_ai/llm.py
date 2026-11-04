@@ -36,7 +36,7 @@ PROVIDERS = {
 }
 # Muse Spark Open on Baseten by default: the same eval results as Muse Spark
 # 1.3 on everything that costs money, at about half the latency
-# (evals/REPORT-baseten.md vs evals/REPORT-meta.md).
+# (evals/reports/baseten.md vs evals/reports/meta.md).
 DEFAULT_PROVIDER = "baseten"
 # Reasoning effort sent by default, per host (None: don't send the parameter).
 DEFAULT_EFFORT = {"baseten": "low"}
