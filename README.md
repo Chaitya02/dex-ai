@@ -60,7 +60,7 @@ sequenceDiagram
 |---|---|
 | `assign_item` | who had an item, equally or by portions ("I had 2 of the 3 sodas") |
 | `unassign_item` | clear an item |
-| `add_person` | someone new; a near-miss of a known contact ("Sashiel" for "Sousheel") is refused with a "did you mean" |
+| `add_person` | someone new; a near-miss of a known contact ("Aleex" for "Alex") is refused with a "did you mean" |
 | `set_payer` | who paid |
 | `set_tax_tip` | tax and tip by what each person had, or evenly |
 | `ask_user` | one short question instead of a guess |
