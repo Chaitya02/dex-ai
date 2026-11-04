@@ -5,8 +5,10 @@ transcribes; every sum is redone here in integer cents, and anything that
 doesn't add up is returned as a check the user sees, never silently fixed.
 """
 import base64
+import io
 import json
 import re
+from dataclasses import replace
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -311,9 +313,33 @@ def _compare(name: str, label: str, computed: int, printed: int) -> dict:
     }
 
 
-def parse(image: bytes, config: llm.LLMConfig | None = None) -> dict:
-    """Receipt photo -> normalized receipt with checks. Raises ReceiptError."""
-    mime = sniff_image(image)
+MIN_LONG_SIDE = 1600     # px: photos smaller than this are upscaled before reading
+MAX_LONG_SIDE = 3200
+RETRY_EFFORT = "medium"  # a second read, only when the first doesn't add up
+
+
+def readable(image: bytes, mime: str) -> tuple[bytes, str]:
+    """The photo the reader sees: small ones enlarged.
+
+    A WhatsApp-compressed Costco receipt (576x1024, 37 lines) read with every
+    price of four items shifted a line, at any reasoning effort and on both
+    models; the same photo at 2x read exactly (evals: 'off by -16.10' -> 0).
+    The text was simply too small. Photos already big enough pass through.
+    """
+    from PIL import Image
+    im = Image.open(io.BytesIO(image))
+    long_side = max(im.size)
+    if long_side >= MIN_LONG_SIDE:
+        return image, mime
+    factor = min(MAX_LONG_SIDE // long_side, max(2, -(-MIN_LONG_SIDE // long_side)))
+    big = im.convert("RGB").resize((im.width * factor, im.height * factor), Image.LANCZOS)
+    buf = io.BytesIO()
+    big.save(buf, "JPEG", quality=92)
+    telemetry.note(upscaled=factor)
+    return buf.getvalue(), "image/jpeg"
+
+
+def _read(image: bytes, mime: str, config: llm.LLMConfig | None) -> dict:
     data_url = f"data:{mime};base64,{base64.b64encode(image).decode()}"
     text = llm.chat(
         [
@@ -334,10 +360,35 @@ def parse(image: bytes, config: llm.LLMConfig | None = None) -> dict:
         timeout=VISION_TIMEOUT,
     )
     try:
-        raw = json.loads(text)
+        return normalize(json.loads(text))
     except json.JSONDecodeError:
         raise ReceiptError("Couldn't read that receipt; try a sharper, flatter photo")
-    receipt = normalize(raw)
-    telemetry.note(items=len(receipt["items"]),
+
+
+def adds_up(receipt: dict) -> bool:
+    return bool(receipt["items"]) and all(c["ok"] for c in receipt["checks"])
+
+
+def parse(image: bytes, config: llm.LLMConfig | None = None) -> dict:
+    """Receipt photo -> normalized receipt with checks. Raises ReceiptError.
+
+    Reads once; if the result doesn't add up (items vs. subtotal, the total),
+    reads once more with more reasoning and keeps whichever adds up, so the
+    slower read only happens when the first one is wrong.
+    """
+    mime = sniff_image(image)
+    image, mime = readable(image, mime)
+    config = config or llm.config_from_env()
+    receipt = _read(image, mime, config)
+    retried = False
+    if not adds_up(receipt):
+        retried = True
+        try:
+            second = _read(image, mime, replace(config, reasoning_effort=RETRY_EFFORT))
+        except (llm.LLMUnavailable, ReceiptError):
+            second = None
+        if second and adds_up(second):
+            receipt = second
+    telemetry.note(items=len(receipt["items"]), retried=retried,
                    checks_failed=sum(not c["ok"] for c in receipt["checks"]))
     return receipt

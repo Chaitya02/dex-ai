@@ -77,7 +77,8 @@ def test_parse_sends_image_and_schema(monkeypatch):
     monkeypatch.setattr(llm, "chat", fake_chat)
     r = receipt.parse(png_bytes())
     image_part = seen["messages"][0]["content"][1]
-    assert image_part["image_url"]["url"].startswith("data:image/png;base64,")
+    # A tiny test image is upscaled first, so it goes as JPEG.
+    assert image_part["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert seen["kwargs"]["response_format"]["type"] == "json_schema"
     assert r["merchant"] == "Luigi's"
 
@@ -177,3 +178,41 @@ def test_lines_still_usable_when_discounts_were_labelled_other():
         raw["priced_lines"][k]["kind"] = "other"
     r = receipt.normalize(raw)
     assert sum(l["kind"] == "item" for l in r["lines"]) == len(r["items"]) == 3
+
+
+def test_small_photos_are_upscaled_and_big_ones_left_alone():
+    import io
+    from PIL import Image
+
+    def jpeg(size):
+        buf = io.BytesIO()
+        Image.new("RGB", size, "white").save(buf, "JPEG")
+        return buf.getvalue()
+
+    small, mime = receipt.readable(jpeg((576, 1024)), "image/jpeg")
+    assert Image.open(io.BytesIO(small)).size == (1152, 2048) and mime == "image/jpeg"
+    big = jpeg((1320, 1760))
+    assert receipt.readable(big, "image/jpeg") == (big, "image/jpeg")
+
+
+def test_a_read_that_doesnt_add_up_is_retried_once(monkeypatch):
+    wrong = {**RAW, "subtotal": 99.99}
+    calls = []
+
+    def fake_chat(messages, config=None, **kwargs):
+        calls.append(config.reasoning_effort)
+        return json.dumps(wrong if len(calls) == 1 else RAW)
+
+    monkeypatch.setenv("BASETEN_API_KEY", "test")
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    r = receipt.parse(png_bytes())
+    assert len(calls) == 2 and calls[1] == receipt.RETRY_EFFORT
+    assert all(c["ok"] for c in r["checks"])
+
+
+def test_a_read_that_adds_up_is_not_retried(monkeypatch):
+    calls = []
+    monkeypatch.setenv("BASETEN_API_KEY", "test")
+    monkeypatch.setattr(llm, "chat", lambda *a, **k: calls.append(1) or json.dumps(RAW))
+    receipt.parse(png_bytes())
+    assert len(calls) == 1
