@@ -7,7 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 S = 2                      # drawn at 2x for a crisp image
-W, H = 1000, 1190          # layout units
+W, H = 1000, 1325          # layout units
 FONT = "/System/Library/Fonts/HelveticaNeue.ttc"
 OUT = Path(__file__).resolve().parent.parent / "docs" / "workflow.png"
 
@@ -65,8 +65,9 @@ def arrow(*pts, label=None, at=None):
         d.text((lx * S, ly * S), label, font=LABEL, fill="black", anchor="mm")
 
 
-L, R, C = 290, 710, 500
+L, R, C = 340, 710, 500
 BW, BH = 300, 74
+X = 95                     # the re-read column, left of the receipt path
 
 d.text((C * S, 48 * S), "How Dex Adds a Shared Bill", font=TITLE, fill="black", anchor="mm")
 
@@ -75,39 +76,44 @@ box(R, 125, 220, 50, ["Voice or text"], pill=True)
 
 box(L, 237, BW, BH, ["Read the receipt", "Muse Spark Open, strict JSON"])
 diamond(L, 345, 230, 100, "Do the sums add up?")
-box(88, 345, 150, BH, ["Read again", "more carefully"])
-box(L, 467, BW, BH, ["Fold discounts into items", "Costco 13.99 and 4.00- = 9.99"])
-box(L, 597, BW, BH, ["Find each price on the photo", "SAM 3.1"])
+box(X, 345, 150, BH, ["Read again", "more carefully"])
+diamond(X, 470, 170, 90, "Adds up now?")
+box(X, 600, 150, BH, ["Flag it", "which sum is off"])
+box(L, 600, BW, BH, ["Fold discounts into items", "a savings line joins its item"])
+box(L, 730, BW, BH, ["Find each price on the photo", "SAM 3.1"])
 
 box(R, 237, BW, BH, ["Transcribe", "Muse Voice Transcribe"])
-box(R, 467, BW, BH, ["Decide who had what", "Muse Spark Open, 6 checked tools"])
-box(R, 597, BW, BH, ["Split to the cent", "tax and tip by what each had"])
+box(R, 600, BW, BH, ["Decide who had what", "Muse Spark Open, 6 checked tools"])
+box(R, 730, BW, BH, ["Split to the cent", "tax and tip by what each had"])
 
-box(C, 737, 340, BH, ["Preview the split", "who owes what, marked on the photo"])
-diamond(C, 850, 200, 100, "Looks right?")
-box(C, 977, 340, BH, ["Save to Balance Dex", "one expense, exact shares, saved once"])
-box(C, 1080, 220, 50, ["Expense log"], pill=True)
+box(C, 870, 340, BH, ["Preview the split", "who owes what, marked on the photo"])
+diamond(C, 983, 200, 100, "Looks right?")
+box(C, 1110, 340, BH, ["Save to Balance Dex", "one expense, exact shares, saved once"])
+box(C, 1210, 220, 50, ["Expense log"], pill=True)
 
 arrow((L, 150), (L, 200))
 arrow((L, 274), (L, 295))
-arrow((L - 115, 345), (163, 345), label="no", at=(172, 324))
-arrow((88, 382), (88, 467), (140, 467))
-arrow((L, 395), (L, 430), label="yes", at=(L + 24, 412))
-arrow((L, 504), (L, 560))
+arrow((L - 115, 345), (X + 75, 345), label="no", at=(X + 97, 324))
+arrow((X, 382), (X, 425))
+arrow((X + 85, 470), (L, 470), label="yes", at=(X + 108, 455))
+arrow((X, 515), (X, 563), label="no", at=(X + 18, 538))
+arrow((X + 75, 600), (L - BW / 2, 600))
+arrow((L, 395), (L, 563), label="yes", at=(L + 24, 415))
+arrow((L, 637), (L, 693))
 
 arrow((R, 150), (R, 200))
-arrow((R, 274), (R, 430))
-arrow((L + BW / 2, 467), (R - BW / 2, 467), label="items", at=(C, 452))
-arrow((R, 504), (R, 560))
+arrow((R, 274), (R, 563))
+arrow((L + BW / 2, 600), (R - BW / 2, 600), label="items", at=((L + R) / 2, 585))
+arrow((R, 637), (R, 693))
 
-arrow((L, 634), (L, 667), (440, 667), (440, 700))
-arrow((R, 634), (R, 667), (560, 667), (560, 700))
-arrow((C, 774), (C, 800))
-arrow((C + 100, 850), (930, 850), (930, 467), (R + BW / 2, 467), label="fix it", at=(780, 835))
-arrow((C, 900), (C, 940), label="approve", at=(C + 42, 920))
-arrow((C, 1014), (C, 1055))
+arrow((L, 767), (L, 800), (440, 800), (440, 833))
+arrow((R, 767), (R, 800), (560, 800), (560, 833))
+arrow((C, 907), (C, 933))
+arrow((C + 100, 983), (930, 983), (930, 600), (R + BW / 2, 600), label="fix it", at=(780, 968))
+arrow((C, 1033), (C, 1073), label="approve", at=(C + 42, 1053))
+arrow((C, 1147), (C, 1185))
 
-d.text((C * S, 1150 * S), "The models read, listen and decide. The code checks every tool call and does all the math.",
+d.text((C * S, 1285 * S), "The models read, listen and decide. The code checks every tool call and does all the math.",
        font=BODY, fill="black", anchor="mm")
 
 img.save(OUT, optimize=True)
