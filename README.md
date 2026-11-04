@@ -157,8 +157,8 @@ leaves the Balance Dex link unset, so visitors can't save into anyone's account.
 writes [evals/reports/baseten.md](evals/reports/baseten.md) (and
 [meta.md](evals/reports/meta.md) for Muse Spark 1.3). The set is 12
 seeded synthetic receipts plus a real phone photo; 20 typed who-had-what cases
-(corrections, portions, new people, ambiguity, mixed Hindi-English); and 6 cases
-spoken by US, UK and Indian-English voices through the whole voice pipeline.
+(corrections, portions, new people, ambiguity, mixed language with English); and 6 cases
+spoken by US, UK and India English voices through the whole voice pipeline.
 Failures that cost money (an item placed on the wrong line, an item put on the
 wrong person) are reported apart from safe ones (left for you to fill in).
 
