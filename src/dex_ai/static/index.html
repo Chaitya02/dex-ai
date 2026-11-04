@@ -11,50 +11,48 @@
   <header>
     <p class="eyebrow">Dex</p>
     <h1>Split it, out loud.</h1>
-    <p class="lede">Snap the bill, say who had what.</p>
+    <p class="lede">Snap the bill, say who had what. Dex does the rest.</p>
   </header>
 
-  <section class="card" id="receipt-card">
-    <div class="card-head">
-      <span class="step">1</span>
-      <h2>Receipt</h2>
-    </div>
+  <section class="card hero" id="receipt-card">
     <label class="drop" id="drop">
       <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
-      <img id="preview" alt="" hidden>
-      <span id="drop-hint">Take a photo or choose one</span>
+      <span class="drop-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-2.5h6L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      </span>
+      <strong>Snap or choose the bill</strong>
+      <small>Dex reads every line, then you just say who had what.</small>
     </label>
-    <button class="primary" id="read-btn" disabled>Read receipt</button>
-    <p class="status" id="receipt-status" role="status"></p>
-    <ul class="checks" id="checks"></ul>
+    <div class="receipt-summary" id="receipt-summary" hidden>
+      <img id="thumb" alt="">
+      <div class="sum-text">
+        <strong id="sum-title"></strong>
+        <span id="sum-meta"></span>
+      </div>
+      <button type="button" class="link" id="new-receipt">New receipt</button>
+    </div>
   </section>
 
-  <section class="card" id="voice-card">
-    <div class="card-head">
-      <span class="step">2</span>
-      <h2>Who had what</h2>
-    </div>
-    <label class="field">
-      <span>Who's splitting</span>
-      <input id="people" type="text" placeholder="Aayush, Ketan, Kunal" autocomplete="off">
-    </label>
+  <ol class="activity" id="activity" aria-live="polite"></ol>
+
+  <section class="card" id="voice-card" hidden>
+    <h2>Who had what?</h2>
+    <input id="people" class="people-input" type="text" placeholder="Who's splitting? Aayush, Ketan, Kunal" autocomplete="off" aria-label="Who's splitting">
     <div class="contacts" id="contacts" hidden></div>
-    <ol class="convo" id="convo" aria-live="polite"></ol>
-    <p class="hint" id="talk-hint">Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”</p>
+    <div class="convo" id="convo" aria-live="polite"></div>
     <button class="mic" id="mic-btn" aria-pressed="false">
       <span class="dot"></span><span id="mic-label">Hold to talk</span>
     </button>
+    <p class="hint" id="talk-hint"></p>
     <form class="type-it" id="type-form">
       <input id="typed" type="text" placeholder="…or type it" autocomplete="off" aria-label="Type who had what">
       <button type="submit">Send</button>
     </form>
-    <p class="status" id="voice-status" role="status"></p>
   </section>
 
   <section class="card" id="proposal-card" hidden>
     <div class="card-head">
-      <span class="step">3</span>
-      <h2>Dex's split</h2>
+      <h2>The split</h2>
       <span class="badge" id="state-badge"></span>
     </div>
 
@@ -69,7 +67,6 @@
         <div class="spots" id="spots"></div>
       </div>
       <div id="photo-editor"></div>
-      <p class="meta" id="sam-note"></p>
     </div>
 
     <div class="paper" id="paper">
@@ -81,19 +78,23 @@
     <div class="bar" id="bar" aria-hidden="true"></div>
     <ul class="people" id="people-out"></ul>
 
-    <div class="options">
-      <label class="field inline">
-        <span>Paid by</span>
-        <select id="payer"></select>
-      </label>
-      <div class="segmented" id="taxtip" role="radiogroup" aria-label="Tax and tip">
-        <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
-        <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
-      </div>
-    </div>
-
     <div class="settle" id="settle-out"></div>
     <p class="meta" id="balance-out"></p>
+
+    <details class="options" id="options">
+      <summary id="options-summary"></summary>
+      <div class="options-body">
+        <label class="field inline">
+          <span>Paid by</span>
+          <select id="payer"></select>
+        </label>
+        <div class="segmented" id="taxtip" role="radiogroup" aria-label="Tax and tip">
+          <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
+          <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
+        </div>
+      </div>
+    </details>
+
     <button class="primary" id="approve-btn" disabled>Looks right</button>
 
     <div class="approved" id="approved" hidden>

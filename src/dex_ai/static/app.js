@@ -91,33 +91,66 @@ function currentAssignments() {
     weights.has(id) ? { item_id: id, weights: weights.get(id) } : { item_id: id, people: [...s] });
 }
 
-// ---- Receipt ----
+// ---- Activity: one line per step, naming the model that did it ----
+let readerName = "Muse Spark";   // set from /health once known
+const MAX_ACTIVITY = 8;
+
+function act(text, model) {
+  const li = el("li", { className: "act running" },
+    el("span", { className: "act-icon", "aria-hidden": "true" }),
+    el("span", { className: "act-text", textContent: text }),
+    model ? el("span", { className: "act-model", textContent: model }) : null);
+  const list = $("activity");
+  list.append(li);
+  while (list.children.length > MAX_ACTIVITY) list.firstElementChild.remove();
+  const started = performance.now();
+  return {
+    done(t, kind = "ok") {
+      li.className = `act ${kind}`;
+      const secs = ((performance.now() - started) / 1000).toFixed(1);
+      li.querySelector(".act-text").textContent = kind === "ok" && model ? `${t} · ${secs}s` : t;
+    },
+    fail(t) { this.done(t, "bad"); },
+  };
+}
+
+// Receipts print merchants in capitals: "LUIGI'S TRATTORIA" -> "Luigi's Trattoria".
+function titleCase(text) {
+  if (!text || text !== text.toUpperCase()) return text;
+  return text.toLowerCase().replace(/(^|[\s-])(\S)/g, (m, sep, ch) => sep + ch.toUpperCase());
+}
+
+// ---- Receipt: picking a photo starts everything ----
 $("photo").addEventListener("change", (e) => {
   photo = e.target.files[0] || null;
-  if (!photo) return;
-  $("preview").src = URL.createObjectURL(photo);
-  $("preview").hidden = false;
-  $("drop-hint").hidden = true;
-  $("read-btn").disabled = false;
-  setStatus($("receipt-status"), "");
+  e.target.value = "";   // picking the same file again still fires
+  if (photo) readReceipt();
 });
+$("new-receipt").addEventListener("click", () => $("photo").click());
 
-$("read-btn").addEventListener("click", async () => {
-  if (!photo) return;
-  $("read-btn").disabled = true;
-  setStatus($("receipt-status"), "Reading with Muse Spark…");
-  const started = performance.now();
+async function readReceipt() {
+  $("activity").replaceChildren();
+  $("thumb").src = URL.createObjectURL(photo);
+  $("sum-title").textContent = "Reading your receipt…";
+  $("sum-meta").textContent = "";
+  $("drop").hidden = true;
+  $("receipt-summary").hidden = false;
+  const a = act("Reading every line", readerName);
   try {
     const r = await postFile("/api/receipts/parse", "image", photo, photo.name);
+    const bad = r.checks.filter((c) => !c.ok);
+    a.done(`Read ${r.items.length} item${r.items.length === 1 ? "" : "s"}` +
+      (bad.length ? "" : " · every sum checks out"), bad.length ? "warn" : "ok");
+    for (const c of bad) act(c.message).done(c.message, "warn");
+    $("sum-title").textContent = titleCase(r.merchant) || "Receipt";
+    $("sum-meta").textContent = [r.date, money(r.total_cents)].filter(Boolean).join(" · ");
     loadReceipt(r);
-    const where = [r.merchant, r.date].filter(Boolean).join(" · ");
-    setStatus($("receipt-status"), `Read ${r.items.length} items${where ? ` from ${where}` : ""} in ${((performance.now() - started) / 1000).toFixed(1)}s`);
   } catch (err) {
-    setStatus($("receipt-status"), err.message, true);
-  } finally {
-    $("read-btn").disabled = false;
+    a.fail(err.message);
+    $("drop").hidden = false;
+    $("receipt-summary").hidden = true;
   }
-});
+}
 
 function loadReceipt(r) {
   receipt = r;
@@ -126,13 +159,12 @@ function loadReceipt(r) {
   payer = ME;
   turns = [];
   approved = false;
-  $("checks").replaceChildren(...r.checks.map((c) =>
-    el("li", { className: c.ok ? "ok" : "bad", textContent: (c.ok ? "✓ " : "⚠ ") + c.message })));
   spots = null;
   view = "list";
   saved = null;
   saveKey = null;
   renderConvo();
+  $("voice-card").hidden = false;
   $("proposal-card").hidden = false;
   recompute();
   locateItems(photo, r);
@@ -140,21 +172,24 @@ function loadReceipt(r) {
 
 // ---- Photo: SAM 3.1 places each item on the receipt, in the background ----
 async function locateItems(file, r) {
-  setStatus($("sam-note"), "");
+  const a = act("Finding each item on your photo", "SAM 3.1");
   try {
     const out = await postFile("/api/receipts/locate", "image", file, file.name, { receipt: JSON.stringify(r) });
     if (receipt !== r) return;          // a newer receipt was read meanwhile
     const placed = Object.keys(out.items).length;
-    if (!placed) return;                // nothing placed confidently: stay on the list
+    if (!placed) {                      // nothing placed confidently: stay on the list
+      a.done("Couldn't pin items to the photo with confidence, so showing the list", "muted");
+      return;
+    }
     spots = out;
     $("photo-img").src = URL.createObjectURL(file);
     const missing = r.items.length - placed;
-    setStatus($("sam-note"), `SAM 3.1 placed ${placed} of ${r.items.length} items on your photo` +
-      (missing ? ` · ${missing} shown only in the list` : ""));
+    a.done(`Marked ${placed} of ${r.items.length} items on your photo` + (missing ? ` (${missing} in the list only)` : ""));
     view = "photo";
     renderProposal();
   } catch {
     // The photo view is extra; the list works without it.
+    a.done("Photo marking unavailable, so showing the list", "muted");
   }
 }
 
@@ -180,9 +215,12 @@ function renderSpots(shares, everyone) {
     });
     spot.setAttribute("aria-label", `${it.name}: ${who.length ? who.map((s) => label(s.name)).join(", ") : "unassigned"}`);
     spot.addEventListener("click", () => { editing = editing === it.id ? null : it.id; renderProposal(); });
+    // Everyone at the table gets one tag; four names would cover the item.
+    const all = who.length > 2 && who.length === everyone.length;
     const tags = el("span", { className: "spot-tags" },
-      ...(who.length ? who.map((s) => el("span", { className: `tag ${colorOf(s.name)}`, textContent: label(s.name) }))
-                     : [el("span", { className: "tag todo", textContent: "?" })]));
+      ...(!who.length ? [el("span", { className: "tag todo", textContent: "?" })]
+        : all ? [el("span", { className: "tag all-tag", textContent: "Everyone" })]
+        : who.map((s) => el("span", { className: `tag ${colorOf(s.name)}`, textContent: label(s.name) }))));
     spot.append(tags);
     return spot;
   }));
@@ -224,7 +262,7 @@ function sharesByItem() {
 function renderProposal() {
   const shares = sharesByItem();
   const everyone = people();
-  $("paper-head").textContent = [receipt.merchant, receipt.date].filter(Boolean).join(" · ") || "Receipt";
+  $("paper-head").textContent = [titleCase(receipt.merchant), receipt.date].filter(Boolean).join(" · ") || "Receipt";
   const onPhoto = !!spots && view === "photo";
   $("views").hidden = !spots;
   document.querySelectorAll("#views button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === view)));
@@ -278,18 +316,21 @@ function renderProposal() {
       ...p.extras.map((e) => line(e.name, money(e.cents))));
     const who = el("span", { className: "who" }, el("i", { className: `swatch ${colorOf(p.name)}` }), label(p.name));
     if (p.name === result.payer) who.append(el("small", { textContent: "paid" }));
+    else if (p.total_cents > 0) who.append(el("small", { textContent: `owes ${result.payer === ME ? "you" : label(result.payer)}` }));
     return el("li", {}, el("details", {}, el("summary", {}, who, el("span", { className: "amt", textContent: money(p.total_cents) })), lines));
   }));
 
   $("payer").replaceChildren(...everyone.map((n) => new Option(label(n), n, false, n === payer)));
   $("payer").disabled = approved;
+  $("options-summary").textContent = `Paid by ${label(payer)} · tax & tip ` +
+    (taxTip === "equal" ? "split evenly" : "by what each person had");
   document.querySelectorAll("#taxtip button").forEach((b) => {
     b.setAttribute("aria-checked", String(b.dataset.mode === taxTip));
     b.disabled = approved;
   });
 
-  $("settle-out").replaceChildren(...result.settlements.map((t) =>
-    el("div", {}, el("span", { textContent: `${label(t.from)} → ${label(t.to)}` }), el("strong", { textContent: money(t.cents) }))));
+  // Who owes whom is on each person's row; the separate list only repeated it.
+  $("settle-out").replaceChildren();
 
   const parts = [`Split ${money(result.split_total_cents)}`];
   if (result.receipt_total_cents != null) parts.push(`of ${money(result.receipt_total_cents)}`);
@@ -374,11 +415,13 @@ $("copy-btn").addEventListener("click", async () => {
 
 // ---- Conversation with Dex ----
 function renderConvo() {
-  $("convo").replaceChildren(...turns.map((t, i) => {
-    const li = el("li", { className: "turn" });
-    li.append(el("p", { className: "you", textContent: t.text }));
+  // Only the latest exchange: the activity feed already says what happened.
+  const latest = turns.length ? [turns[turns.length - 1]] : [];
+  $("convo").replaceChildren(...latest.map((t) => {
+    const i = turns.length - 1;
+    const li = el("div", { className: "turn" });
     if (t.pending) {
-      li.append(el("p", { className: "dex thinking", textContent: "Dex is working on it…" }));
+      li.append(el("p", { className: "dex thinking", textContent: "Dex is on it…" }));
       return li;
     }
     if (t.error) {
@@ -409,8 +452,8 @@ function renderConvo() {
     return li;
   }));
   $("talk-hint").textContent = turns.length
-    ? "Say a fix: “No, Aayush didn't have the fries” or “Kunal paid.”"
-    : "Hold the button and talk: “I had the pasta, Aayush and Ketan split the pizza, everyone shared the fries.”";
+    ? "Fix anything the same way: “No, Aayush didn't have the fries” or “Kunal paid.”"
+    : "Hold and say it like you would to a friend: “I had the pasta, Aayush and Ketan split the pizza, we all shared the fries.”";
 }
 
 function describeAction(a) {
@@ -437,12 +480,13 @@ $("type-form").addEventListener("submit", async (e) => {
 });
 
 async function runAgent(text, spoken = false) {
-  if (!receipt) return setStatus($("voice-status"), "Read a receipt first", true);
+  if (!receipt) return act("").fail("Snap a receipt first");
   if (approved) { approved = false; }
   const turn = { text, pending: true, before: snapshot() };
   turns.push(turn);
   renderConvo();
-  setStatus($("voice-status"), "");
+  if (!spoken) act("").done(`You: “${text}”`, "said");
+  const a = act("Working out who had what", readerName);
   try {
     const out = await postJson("/api/assign", {
       receipt, transcript: text, assignments: currentAssignments(),
@@ -451,8 +495,13 @@ async function runAgent(text, spoken = false) {
     });
     turn.out = out;
     applyAgent(out);
+    const items = new Set(out.actions.filter((x) => x.item_id).map((x) => x.item_id)).size;
+    const added = out.added_people.length ? ` · added ${out.added_people.join(", ")}` : "";
+    a.done(items ? `Updated ${items} item${items === 1 ? "" : "s"}${added}` : "Nothing to change", items ? "ok" : "muted");
+    for (const q of out.questions) act("").done(`Dex asks: ${q}`, "warn");
   } catch (err) {
     turn.error = err.message;
+    a.fail(err.message);
   } finally {
     turn.pending = false;
     renderConvo();
@@ -493,9 +542,8 @@ async function startRecording() {
     rec = { stream, ctx, node, chunks, started: performance.now() };
     $("mic-btn").setAttribute("aria-pressed", "true");
     $("mic-label").textContent = "Listening… release to send";
-    setStatus($("voice-status"), "");
   } catch (err) {
-    setStatus($("voice-status"), "Microphone unavailable: " + err.message, true);
+    act("").fail("Microphone unavailable: " + err.message);
   }
 }
 
@@ -509,10 +557,10 @@ async function stopRecording() {
   $("mic-btn").setAttribute("aria-pressed", "false");
   $("mic-label").textContent = "Hold to talk";
   if (performance.now() - started < 400) {
-    setStatus($("voice-status"), "Hold the button while you talk", true);
+    act("").done("Hold the button while you talk", "muted");
     return;
   }
-  setStatus($("voice-status"), "Transcribing with Muse Voice Transcribe…");
+  const a = act("Listening", "Muse Voice Transcribe");
   try {
     // People in the split and the receipt's items bias recognition toward the
     // words the split depends on. Contacts go to the agent instead: hinting all
@@ -521,11 +569,11 @@ async function stopRecording() {
     const items = receipt ? receipt.items.map((it) => it.name) : [];
     const r = await postFile("/api/voice/transcribe", "audio", encodeWav(chunks, SAMPLE_RATE), "speech.wav",
       { keywords: [...new Set([...people().filter((n) => n !== ME), ...items])].join(",") });
-    setStatus($("voice-status"), "");
-    if (!r.transcript) return setStatus($("voice-status"), "Didn't catch that, try again", true);
+    if (!r.transcript) return a.done("Didn't catch that, try again", "muted");
+    a.done(`Heard “${r.transcript}”`);
     await runAgent(r.transcript, true);
   } catch (err) {
-    setStatus($("voice-status"), err.message, true);
+    a.fail(err.message);
   }
 }
 
@@ -647,6 +695,7 @@ const HOSTS = { meta: "Meta Model API", baseten: "Baseten", fireworks: "Firework
     const h = await (await fetch("/health")).json();
     if (!h.llm || h.llm.error) return;
     const model = MODEL_NAMES[h.llm.model] || h.llm.model;
+    readerName = model;
     $("powered").textContent = `${model} on ${HOSTS[h.llm.provider] || h.llm.provider} · ` +
       "Muse Voice Transcribe · SAM 3.1";
   } catch { /* the footer is decoration */ }

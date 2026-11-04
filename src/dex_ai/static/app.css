@@ -265,3 +265,57 @@ select {
 .bd-save .primary { margin-top: 10px; }
 
 .powered { margin-top: 24px; text-align: center; font-size: 12px; color: var(--muted); }
+
+/* ---- Seamless flow: hero, activity feed, folded options ---- */
+.hero .drop {
+  min-height: 200px; gap: 6px; align-content: center;
+  border-width: 2px; background: var(--bg);
+}
+.hero .drop strong { font-size: 17px; color: var(--ink); }
+.hero .drop small { font-size: 13px; }
+.drop-icon {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 4px;
+  background: var(--ink); color: var(--card);
+}
+.receipt-summary { display: flex; align-items: center; gap: 12px; }
+.receipt-summary img { width: 48px; height: 60px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.sum-text { flex: 1; min-width: 0; display: grid; }
+.sum-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sum-text span { font-size: 13px; color: var(--muted); }
+
+.activity { list-style: none; margin: -4px 4px 16px; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.activity:empty { display: none; }
+.act { display: flex; align-items: baseline; gap: 8px; color: var(--muted); }
+.act-icon { flex: none; width: 14px; text-align: center; }
+.act.running .act-icon::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+.act.ok .act-icon::before { content: "✓"; color: var(--good); font-weight: 700; }
+.act.warn .act-icon::before { content: "!"; color: var(--warn); font-weight: 700; }
+.act.bad .act-icon::before { content: "✕"; color: var(--bad); font-weight: 700; }
+.act.muted .act-icon::before { content: "·"; }
+.act.said .act-icon::before { content: "›"; }
+.act.ok .act-text, .act.said .act-text { color: var(--ink); }
+.act.bad .act-text { color: var(--bad); }
+.act-text { flex: 1; min-width: 0; }
+.act-model {
+  flex: none; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line); color: var(--muted);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#voice-card h2, #proposal-card h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+#proposal-card .card-head h2 { margin: 0; }
+.people-input {
+  width: 100%; padding: 10px 12px; margin-bottom: 10px; font: inherit; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+}
+.convo { margin: 0 0 12px; }
+.convo:empty { display: none; }
+.convo .turn .dex { max-width: 100%; }
+#talk-hint { margin: 10px 0 0; text-align: center; }
+
+details.options { display: block; margin-top: 12px; font-size: 14px; }
+details.options summary { cursor: pointer; color: var(--muted); }
+details.options summary:hover { color: var(--ink); }
+.options-body { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 10px; }
+.tag.all-tag { color: var(--card); background: var(--ink); }
