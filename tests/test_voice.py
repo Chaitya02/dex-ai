@@ -81,4 +81,4 @@ def test_transcribe_endpoint_passes_keywords(monkeypatch):
 def test_index_page_served():
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "Split it, out loud" in resp.text
+    assert "Instantly add, without the hassle</h1>" in resp.text
