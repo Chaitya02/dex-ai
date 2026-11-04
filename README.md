@@ -34,8 +34,6 @@ visit after a quiet spell takes 30–60s to wake. Use your own receipt or
 
 ![How Dex adds a shared bill: read the receipt and check the sums, transcribe what you said, decide who had what with checked tools, split to the cent, preview, then save to Balance Dex](docs/workflow.png)
 
-<sub>Drawn by [`scripts/draw_workflow.py`](scripts/draw_workflow.py).</sub>
-
 ### The agent: the model decides, the code does the work
 
 The model never does arithmetic and never writes anything. It can only call six
