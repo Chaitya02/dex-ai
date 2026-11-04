@@ -49,7 +49,9 @@
       <section class="card chat" id="voice-card" hidden>
         <img class="chat-fox" src="/static/dex-fox.svg" alt="" aria-hidden="true">
         <div class="chat-log" id="convo" aria-live="polite"></div>
-        <input id="people" class="people-input" type="text" placeholder="Splitting with… Aayush, Ketan, Kunal" autocomplete="off" aria-label="Who's splitting">
+        <div class="starters" id="starters"></div>
+        <!-- People come from the conversation; this holds them for the page's own use. -->
+        <input id="people" type="hidden">
         <div class="contacts" id="contacts" hidden></div>
         <div class="chat-input">
           <button class="mic" id="mic-btn" aria-pressed="false" aria-label="Hold to talk to Dex">
@@ -57,10 +59,12 @@
           </button>
           <form class="type-it" id="type-form">
             <input id="typed" type="text" placeholder="…or message Dex" autocomplete="off" aria-label="Message Dex">
-            <button type="submit">Send</button>
+            <button type="submit" class="send" aria-label="Send">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>
+            </button>
           </form>
         </div>
-        <p class="hint" id="talk-hint"></p>
+        <p class="hint" id="talk-hint" hidden></p>
       </section>
     </div>
 
@@ -69,6 +73,17 @@
         <h2>The split</h2>
         <span class="badge" id="state-badge"></span>
       </div>
+
+      <div class="entry" id="entry">
+        <p class="entry-title" id="entry-title"></p>
+        <p class="entry-meta" id="entry-meta"></p>
+      </div>
+
+      <ul class="people" id="people-out"></ul>
+      <p class="meta" id="balance-out"></p>
+
+      <details class="receipt-view" id="receipt-view">
+        <summary>See it on the receipt</summary>
 
       <div class="segmented views" id="views" role="tablist" aria-label="View" hidden>
         <button role="tab" aria-selected="true" data-view="photo">Photo</button>
@@ -89,11 +104,10 @@
         <dl class="paper-totals" id="paper-totals"></dl>
       </div>
 
-      <div class="bar" id="bar" aria-hidden="true"></div>
-      <ul class="people" id="people-out"></ul>
+      </details>
 
-      <div class="settle" id="settle-out"></div>
-      <p class="meta" id="balance-out"></p>
+      <div class="bar" id="bar" aria-hidden="true" hidden></div>
+      <div class="settle" id="settle-out" hidden></div>
 
       <details class="options" id="options">
         <summary id="options-summary"></summary>

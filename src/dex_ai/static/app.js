@@ -266,6 +266,10 @@ function renderProposal() {
   const shares = sharesByItem();
   const everyone = people();
   $("paper-head").textContent = [titleCase(receipt.merchant), receipt.date].filter(Boolean).join(" · ") || "Receipt";
+  // What goes into the expense log: title, date, total, who paid, the shares.
+  $("entry-title").textContent = titleCase(receipt.merchant) || "Shared bill";
+  $("entry-meta").textContent = [receipt.date, money(receipt.total_cents),
+    `paid by ${payer === ME ? "you" : label(payer)}`].filter(Boolean).join(" · ");
   const onPhoto = !!spots && view === "photo";
   $("views").hidden = !spots;
   document.querySelectorAll("#views button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === view)));
@@ -456,9 +460,27 @@ function renderConvo() {
   });
   $("convo").replaceChildren(...log);
   $("convo").scrollTop = $("convo").scrollHeight;
+  renderStarters();
   $("talk-hint").textContent = turns.length
     ? "Fix anything the same way: “No, Aayush didn't have the fries” or “Kunal paid.”"
     : "Hold to talk, or type: “I had the pasta, Aayush and Ketan split the pizza, we all shared the fries.”";
+}
+
+// Suggested first messages, gone once the user has said anything.
+function renderStarters() {
+  const box = $("starters");
+  if (!receipt || turns.length) return box.replaceChildren();
+  const first = receipt.items.find((it) => it.amount_cents > 0);
+  const ideas = [
+    "We split everything evenly, and I paid",
+    first ? `I had the ${first.name}, the rest was shared` : null,
+    "It was all mine",
+  ].filter(Boolean);
+  box.replaceChildren(...ideas.map((text) => {
+    const b = el("button", { type: "button", className: "starter", textContent: text });
+    b.addEventListener("click", () => runAgent(text));
+    return b;
+  }));
 }
 
 function describeAction(a) {
@@ -622,7 +644,7 @@ function renderContacts() {
   const box = $("contacts");
   const named = new Set(people().map((n) => n.toLowerCase()));
   const options = (bd.contacts || []).filter((c) => !named.has(c.toLowerCase())).slice(0, 12);
-  box.hidden = !bd.linked || !options.length;
+  box.hidden = true;   // names come from the conversation; contacts go to the agent
   box.replaceChildren(el("span", { className: "meta", textContent: "Your contacts:" }), ...options.map((c) => {
     const b = el("button", { type: "button", className: "chip", textContent: `+ ${c}` });
     b.addEventListener("click", () => {

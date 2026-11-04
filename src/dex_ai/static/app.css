@@ -393,3 +393,18 @@ main.layout { max-width: 1120px; padding: 28px 16px 64px; }
 .chat-input { display: grid; gap: 8px; }
 .chat .type-it { margin-top: 0; }
 .chat #talk-hint { margin: 10px 0 0; font-size: 13px; }
+
+/* ---- Starters, send icon, the expense entry ---- */
+.starters { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 12px; }
+.starters:empty { display: none; }
+.starter {
+  padding: 6px 12px; font-size: 13px; color: var(--accent);
+  background: var(--card); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.starter:hover { background: var(--accent-light); }
+.type-it button.send { width: 44px; padding: 0; display: grid; place-items: center; }
+.entry { margin: 4px 0 8px; }
+.entry-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.entry-meta { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+details.receipt-view { margin: 12px 0 4px; font-size: 14px; }
+details.receipt-view > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
