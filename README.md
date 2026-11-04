@@ -223,3 +223,7 @@ Everything in this repository was written during the hackathon, from Oct 26,
 this submission. The one change made to it during the event is the link API Dex
 saves through (`routes/link.py`: a token-protected `/api/link/v1` with an
 idempotency key on every write), kept in its own module.
+
+## License
+
+[MIT](LICENSE)

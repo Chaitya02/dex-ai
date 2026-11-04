@@ -3,6 +3,7 @@ name = "dex-ai"
 version = "0.1.0"
 description = "Dex: a voice-first agentic expense companion on Meta models"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Chaitya Dobariya", email = "chaityadobariya02@gmail.com" }
 ]
