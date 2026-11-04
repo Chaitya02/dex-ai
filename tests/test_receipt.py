@@ -115,3 +115,65 @@ def test_priced_lines_kept_only_when_they_match_the_items():
 ])
 def test_dates_become_iso(raw, iso):
     assert receipt.iso_date(raw) == iso
+
+
+def costco_raw(**over):
+    raw = {
+        "merchant": "COSTCO WHOLESALE", "date": "10/31/2026", "currency": "USD",
+        "items": [
+            {"name": "SLCD SALAME", "quantity": 1, "amount": 13.99, "discount_for": None},
+            {"name": "0000395766 / 820590", "quantity": 1, "amount": -4.00, "discount_for": 1},
+            {"name": "DOTS PRETZEL", "quantity": 1, "amount": 9.99, "discount_for": None},
+            {"name": "MANDARINS", "quantity": 1, "amount": 4.69, "discount_for": None},
+            {"name": "0000397358 /1801", "quantity": 1, "amount": -2.00, "discount_for": 4},
+        ],
+        "subtotal": 22.67, "tax": 0, "tip": None, "other_charges": [], "total": 22.67,
+        "priced_lines": [{"kind": "item", "amount": a, "y": 100 + 20 * k}
+                         for k, a in enumerate([13.99, -4, 9.99, 4.69, -2])]
+                        + [{"kind": "other", "amount": 22.67, "y": 300}],
+    }
+    raw.update(over)
+    return raw
+
+
+def test_costco_discounts_fold_into_their_items():
+    r = receipt.normalize(costco_raw())
+    assert [(i["id"], i["name"], i["amount_cents"], i.get("savings_cents")) for i in r["items"]] == [
+        (1, "SLCD SALAME", 999, 400), (2, "DOTS PRETZEL", 999, None), (3, "MANDARINS", 269, 200)]
+    assert all(c["ok"] for c in r["checks"])
+    # The discount lines are still priced lines on the photo, just not items.
+    assert [l["kind"] for l in r["lines"]] == ["item", "other", "item", "item", "other", "other"]
+
+
+def test_discount_without_a_valid_target_stays_a_line():
+    raw = costco_raw()
+    raw["items"][1]["discount_for"] = 9       # no such item
+    raw["items"][4]["discount_for"] = None    # not said
+    r = receipt.normalize(raw)
+    assert [i["amount_cents"] for i in r["items"]] == [1399, -400, 999, 469, -200]
+
+
+def test_discount_bigger_than_its_item_is_not_folded():
+    raw = costco_raw()
+    raw["items"][1]["amount"] = -20.00
+    r = receipt.normalize(raw)
+    assert r["items"][0]["amount_cents"] == 1399 and r["items"][1]["amount_cents"] == -2000
+
+
+@pytest.mark.parametrize("raw, name", [
+    ("E  782796 KSWTR40PK", "KSWTR40PK"),
+    ("1462714 KS ORG A2 PR", "KS ORG A2 PR"),
+    ("2% MILK 1GAL", "2% MILK 1GAL"),
+    ("0000395766 / 820590", "0000395766 / 820590"),   # nothing left to name: keep it
+    ("Margherita Pizza", "Margherita Pizza"),
+])
+def test_item_names_drop_product_codes(raw, name):
+    assert receipt.item_name(raw) == name
+
+
+def test_lines_still_usable_when_discounts_were_labelled_other():
+    raw = costco_raw()
+    for k in (1, 4):
+        raw["priced_lines"][k]["kind"] = "other"
+    r = receipt.normalize(raw)
+    assert sum(l["kind"] == "item" for l in r["lines"]) == len(r["items"]) == 3

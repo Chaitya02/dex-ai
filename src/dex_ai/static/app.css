@@ -370,11 +370,12 @@ main.layout { max-width: 1120px; padding: 28px 16px 64px; }
 }
 
 /* ---- Chat with Dex, with the fox on top ---- */
-.card.chat { position: relative; margin-top: 44px; padding-top: 22px; }
+.card.chat { position: relative; margin-top: 76px; padding-top: 22px; }
 .chat-fox {
-  position: absolute; right: 22px; top: -40px; width: 66px; height: 44px;
-  image-rendering: pixelated; pointer-events: none;
+  position: absolute; right: 22px; top: -64px; width: 96px; height: 64px;   /* feet on the card's top edge */
+  padding: 0; background: none; border: 0; border-radius: 0; cursor: pointer;
 }
+.chat-fox svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .chat-log { display: grid; gap: 10px; max-height: 420px; overflow-y: auto; margin-bottom: 12px; padding-right: 2px; }
 .chat-log:empty { display: none; }
 .bubble { max-width: 88%; padding: 9px 13px; font-size: 14px; line-height: 1.45; }
@@ -408,3 +409,71 @@ main.layout { max-width: 1120px; padding: 28px 16px 64px; }
 .entry-meta { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
 details.receipt-view { margin: 12px 0 4px; font-size: 14px; }
 details.receipt-view > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin-bottom: 10px; }
+
+
+/* ---- One input row: text, hold-to-talk mic, send ---- */
+.chat-input { display: flex; gap: 8px; align-items: center; }
+.chat-input input {
+  flex: 1; min-width: 0; padding: 11px 14px; font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+}
+.chat-input input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 1px; }
+.icon-btn {
+  flex: none; width: 42px; height: 42px; padding: 0; display: grid; place-items: center;
+  background: var(--accent); color: #fff; border-radius: 50%;
+}
+.icon-btn:hover { background: var(--accent-hover); }
+.mic.icon-btn { background: var(--accent-light); color: var(--accent); }
+.mic.icon-btn[aria-pressed="true"] { background: var(--bad); color: #fff; animation: pulse-ring 1s infinite; }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bad) 45%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-color-scheme: dark) { .icon-btn { color: #0f1d15; } .mic.icon-btn { color: var(--accent); } }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---- Dex the fox: Balance Dex's idle life and reactions (from its style.css) ---- */
+/* Idle life — shared by the chat pet and the ask-bar fox */
+.dex-pet .fox,
+.dex-top-bar-pet .fox      { transform-box: fill-box; transform-origin: 50% 92%; }
+.dex-pet .fox-eyes,
+.dex-top-bar-pet .fox-eyes { transform-box: fill-box; transform-origin: center;
+                             animation: foxBlink 4.5s ease-in-out infinite; }
+.dex-pet .fox-ear-r,
+.dex-top-bar-pet .fox-ear-r{ transform-box: fill-box; transform-origin: 50% 100%;
+                             animation: foxEarTwitch 6s ease-in-out infinite; }
+.dex-pet .fox-tail,
+.dex-top-bar-pet .fox-tail { transform-box: fill-box; transform-origin: 0% 100%;
+                             animation: foxTailWag 2.8s ease-in-out infinite; }
+
+@keyframes foxBob       { 0%,100% { transform: translateY(0); }   50% { transform: translateY(-2.5px); } }
+@keyframes foxBlink     { 0%,92%,100% { transform: scaleY(1); }   95% { transform: scaleY(0.12); } }
+@keyframes foxEarTwitch { 0%,88%,100% { transform: rotate(0); }   92% { transform: rotate(-10deg); } 96% { transform: rotate(5deg); } }
+@keyframes foxTailWag   { 0%,100% { transform: rotate(-6deg); }   50% { transform: rotate(9deg); } }
+
+/* Hover — tail goes wild */
+.dex-pet:hover .fox-tail { animation-duration: 0.6s; }
+
+/* Reaction: happy wiggle (responses, saved changes) */
+.dex-pet--happy .fox { animation: foxHappy 0.65s ease; }
+@keyframes foxHappy {
+    0%,100% { transform: translateY(0) rotate(0); }
+    25%     { transform: translateY(-7px) rotate(-5deg); }
+    50%     { transform: translateY(0) rotate(0); }
+    75%     { transform: translateY(-5px) rotate(5deg); }
+}
+
+/* Reaction: thinking head-tilt while Dex works */
+.dex-pet--think .fox { animation: foxThink 1.1s ease-in-out infinite; }
+@keyframes foxThink { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-7deg); } }
+
+/* Reaction: oops shake on errors */
+.dex-pet--oops .fox { animation: foxShake 0.5s ease; }
+@keyframes foxShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-5px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(3px); } }
+
+/* Reaction: wink when poked */
+.dex-pet--wink .fox-eye-r { transform-box: fill-box; transform-origin: center; animation: foxWink 0.5s ease; }
+@keyframes foxWink { 0%,100% { transform: scaleY(1); } 40%,60% { transform: scaleY(0.1); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .dex-pet, .dex-pet .fox, .dex-pet .fox-eyes, .dex-pet .fox-ear-r,
+    .dex-pet .fox-tail, .dex-pet--happy .fox, .dex-pet--think .fox,
+    .dex-pet--oops .fox, .dex-pet--wink .fox-eye-r { animation: none; }
+}

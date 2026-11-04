@@ -513,6 +513,7 @@ async function runAgent(text, spoken = false) {
   turns.push(turn);
   renderConvo();
   const a = act("Working out who had what", true);
+  foxReact("think");
   try {
     const out = await postJson("/api/assign", {
       receipt, transcript: text, assignments: currentAssignments(),
@@ -525,9 +526,12 @@ async function runAgent(text, spoken = false) {
     const added = out.added_people.length ? ` · added ${out.added_people.join(", ")}` : "";
     a.done(items ? `Updated ${items} item${items === 1 ? "" : "s"}${added}` : "Nothing to change", items ? "ok" : "muted");
     for (const q of out.questions) act("").done(`Dex asks: ${q}`, "warn");
+    foxReact("happy");
+    setTimeout(() => foxReact("wink", 550), 700);
   } catch (err) {
     turn.error = err.message;
     a.fail(err.message);
+    foxReact("oops", 550);
   } finally {
     turn.pending = false;
     renderConvo();
@@ -568,6 +572,8 @@ async function startRecording() {
     rec = { stream, ctx, node, chunks, started: performance.now() };
     $("mic-btn").setAttribute("aria-pressed", "true");
     $("mic-label").textContent = "Listening… release to send";
+    $("typed").dataset.placeholder = $("typed").placeholder;
+    $("typed").placeholder = "Listening… let go when you're done";
   } catch (err) {
     act("").fail("Microphone unavailable: " + err.message);
   }
@@ -582,6 +588,7 @@ async function stopRecording() {
   await ctx.close();
   $("mic-btn").setAttribute("aria-pressed", "false");
   $("mic-label").textContent = "Hold to talk";
+  if ($("typed").dataset.placeholder) $("typed").placeholder = $("typed").dataset.placeholder;
   if (performance.now() - started < 400) {
     act("").done("Hold the button while you talk", "muted");
     return;
@@ -709,3 +716,14 @@ $("bd-save-btn").addEventListener("click", async () => {
 });
 
 loadBalanceDesk();
+
+// ---- Dex the fox: wink when tapped, think while working, react to answers ----
+function foxReact(kind, ms = 700) {
+  const pet = $("dex-pet");
+  if (!pet) return;
+  pet.classList.remove("dex-pet--wink", "dex-pet--happy", "dex-pet--oops", "dex-pet--think");
+  void pet.offsetWidth;   // restart the animation if it's the same one again
+  pet.classList.add(`dex-pet--${kind}`);
+  if (kind !== "think") setTimeout(() => pet.classList.remove(`dex-pet--${kind}`), ms);
+}
+$("dex-pet").addEventListener("click", () => foxReact("wink", 550));

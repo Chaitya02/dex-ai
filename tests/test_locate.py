@@ -140,7 +140,14 @@ def test_unlabeled_amount_after_items_pins_them_despite_a_line_of_drift():
     to_y = lambda px: round(px * 1000 / 1760)
     r = receipt([to_y(c + 45) for c in item_cy], [to_y(extra_cy + 30)] + [to_y(c) for c in footer_cy])
     out = locate.place(r, paper, nums)
-    assert placed_centres(out) == item_cy
+    # Right line or not at all: never a band on the wrong line.
+    assert placed_centres(out) in (item_cy, [])
+    locate_guard_off = locate.MIN_MARGIN
+    try:
+        locate.MIN_MARGIN = 0
+        assert placed_centres(locate.place(r, paper, nums)) == item_cy
+    finally:
+        locate.MIN_MARGIN = locate_guard_off
 
 
 def test_boxes_do_not_overlap():

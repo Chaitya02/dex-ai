@@ -46,9 +46,12 @@ TIMEOUT = 30
 RIGHT_EDGE = 0.70        # a price's right edge is past this fraction of the paper's width
 # Lines the best alignment must beat any different one by, or nothing is
 # placed. Calibrated on the eval set, both models, guard off: 52 placements,
-# all correct, margins 0.22-2.28; the one captured wrong placement (9 items a
-# line out) had 0.10. 0.3 catches that and keeps 51 of 52 correct ones.
-MIN_MARGIN = 0.3
+# all correct, margins 0.22-2.28 (all but one at 0.61 or more). The wrong
+# placements captured so far had 0.10 (synthetic receipt, 9 items a line out)
+# and 0.31 (a long Costco-style receipt with a numbered member line, every
+# item a line out). 0.5 catches both; a band on the wrong line is worse than
+# none, since the list still shows every item.
+MIN_MARGIN = 0.5
 STRIP_ASPECT = 0.22      # strip height as a fraction of the receipt's width: a few lines
 MAX_STRIPS = 16
 STRIP_WORKERS = 6
