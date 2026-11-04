@@ -685,12 +685,12 @@ function renderSave() {
   const btn = $("bd-save-btn");
   if (saved) {
     btn.disabled = true;
-    btn.textContent = "Saved to Balance Desk ✓";
+    btn.textContent = "Saved to Balance Dex ✓";
     setStatus($("bd-status"), `Expense #${saved.expense.id}${saved.replayed ? " (already saved earlier)" : ""}. ` +
-      "Edits from here on won't change it; edit it in Balance Desk.");
+      "Edits from here on won't change it; edit it in Balance Dex.");
   } else {
     btn.disabled = false;
-    btn.textContent = "Save to Balance Desk";
+    btn.textContent = "Save to Balance Dex";
   }
 }
 

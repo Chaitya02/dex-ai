@@ -98,11 +98,11 @@ def paper() -> Image.Image:
     return img.convert("RGB")
 
 
-def photo(path):
+def photo(path, skew=0.02, tilt=-0.8, blur=0.9, size=(900, 1600), quality=60):
     p = paper()
     # perspective: the top edge further from the camera, so narrower
     w, h = p.size
-    k = 0.06 * w
+    k = skew * w
     p = p.transform((w, h), Image.Transform.QUAD, (-k, 0, -k * 0.2, h, w + k * 0.2, h, w + k, 0),
                     Image.Resampling.BICUBIC, fillcolor=(214, 211, 204))
     mask = Image.new("L", p.size, 0)
@@ -112,7 +112,7 @@ def photo(path):
     noise = Image.effect_noise(table.size, 10).convert("RGB")
     table = Image.blend(table, noise, 0.06)
     table.paste(p, (int(w * 0.26), int(h * 0.2)), mask)
-    table = table.rotate(-2.2, resample=Image.Resampling.BICUBIC, fillcolor=(216, 213, 207))
+    table = table.rotate(tilt, resample=Image.Resampling.BICUBIC, fillcolor=(216, 213, 207))
 
     # a hand's shadow across the lower half
     shade = Image.new("L", table.size, 0)
@@ -121,9 +121,9 @@ def photo(path):
     shade = shade.filter(ImageFilter.GaussianBlur(30))
     table = Image.composite(Image.new("RGB", table.size, (40, 40, 45)), table, shade)
 
-    table = table.filter(ImageFilter.GaussianBlur(0.9))
-    table.thumbnail((576, 1024), Image.Resampling.LANCZOS)
-    table.save(path, quality=50)
+    table = table.filter(ImageFilter.GaussianBlur(blur))
+    table.thumbnail(size, Image.Resampling.LANCZOS)
+    table.save(path, quality=quality)
 
 
 if __name__ == "__main__":
