@@ -92,14 +92,12 @@ function currentAssignments() {
 }
 
 // ---- Activity: one line per step, naming the model that did it ----
-let readerName = "Muse Spark";   // set from /health once known
 const MAX_ACTIVITY = 8;
 
-function act(text, model) {
+function act(text, timed) {
   const li = el("li", { className: "act running" },
     el("span", { className: "act-icon", "aria-hidden": "true" }),
-    el("span", { className: "act-text", textContent: text }),
-    model ? el("span", { className: "act-model", textContent: model }) : null);
+    el("span", { className: "act-text", textContent: text }));
   const list = $("activity");
   list.append(li);
   while (list.children.length > MAX_ACTIVITY) list.firstElementChild.remove();
@@ -108,7 +106,7 @@ function act(text, model) {
     done(t, kind = "ok") {
       li.className = `act ${kind}`;
       const secs = ((performance.now() - started) / 1000).toFixed(1);
-      li.querySelector(".act-text").textContent = kind === "ok" && model ? `${t} · ${secs}s` : t;
+      li.querySelector(".act-text").textContent = kind === "ok" && timed ? `${t} · ${secs}s` : t;
     },
     fail(t) { this.done(t, "bad"); },
   };
@@ -135,7 +133,7 @@ async function readReceipt() {
   $("sum-meta").textContent = "";
   $("drop").hidden = true;
   $("receipt-summary").hidden = false;
-  const a = act("Reading every line", readerName);
+  const a = act("Reading every line", true);
   try {
     const r = await postFile("/api/receipts/parse", "image", photo, photo.name);
     const bad = r.checks.filter((c) => !c.ok);
@@ -144,6 +142,9 @@ async function readReceipt() {
     for (const c of bad) act(c.message).done(c.message, "warn");
     $("sum-title").textContent = titleCase(r.merchant) || "Receipt";
     $("sum-meta").textContent = [r.date, money(r.total_cents)].filter(Boolean).join(" · ");
+    greeting = `Got it: ${r.items.length} item${r.items.length === 1 ? "" : "s"}` +
+      `${r.merchant ? ` from ${titleCase(r.merchant)}` : ""}, ${money(r.total_cents)} in all. ` +
+      "Who had what? Tell me like you'd tell a friend.";
     loadReceipt(r);
   } catch (err) {
     a.fail(err.message);
@@ -159,6 +160,7 @@ function loadReceipt(r) {
   payer = ME;
   turns = [];
   approved = false;
+  if (!greeting) greeting = "";
   spots = null;
   view = "list";
   saved = null;
@@ -166,13 +168,14 @@ function loadReceipt(r) {
   renderConvo();
   $("voice-card").hidden = false;
   $("proposal-card").hidden = false;
+  $("layout").classList.add("has-split");
   recompute();
   locateItems(photo, r);
 }
 
 // ---- Photo: SAM 3.1 places each item on the receipt, in the background ----
 async function locateItems(file, r) {
-  const a = act("Finding each item on your photo", "SAM 3.1");
+  const a = act("Finding each item on your photo", true);
   try {
     const out = await postFile("/api/receipts/locate", "image", file, file.name, { receipt: JSON.stringify(r) });
     if (receipt !== r) return;          // a newer receipt was read meanwhile
@@ -414,28 +417,29 @@ $("copy-btn").addEventListener("click", async () => {
 });
 
 // ---- Conversation with Dex ----
+let greeting = "";   // Dex's first message once a receipt is read
+
 function renderConvo() {
-  // Only the latest exchange: the activity feed already says what happened.
-  const latest = turns.length ? [turns[turns.length - 1]] : [];
-  $("convo").replaceChildren(...latest.map((t) => {
-    const i = turns.length - 1;
-    const li = el("div", { className: "turn" });
+  const log = [];
+  if (greeting) log.push(el("div", { className: "bubble dex" }, el("p", { textContent: greeting })));
+  turns.forEach((t, i) => {
+    log.push(el("div", { className: "bubble you" + (t.spoken ? " spoken" : "") }, el("p", { textContent: t.text })));
     if (t.pending) {
-      li.append(el("p", { className: "dex thinking", textContent: "Dex is on it…" }));
-      return li;
+      log.push(el("div", { className: "bubble dex thinking" }, el("p", { textContent: "…" })));
+      return;
     }
     if (t.error) {
-      li.append(el("p", { className: "dex error", textContent: t.error }));
-      return li;
+      log.push(el("div", { className: "bubble dex error" }, el("p", { textContent: t.error })));
+      return;
     }
-    const dex = el("div", { className: "dex" }, el("p", { textContent: t.out.summary || "Done." }));
-    if (t.out.actions.length) {
-      dex.append(el("details", { className: "did" },
-        el("summary", { textContent: `What Dex did (${t.out.actions.length})` }),
-        el("ul", {}, ...t.out.actions.map((a) => el("li", { textContent: describeAction(a) })))));
-    }
+    const dex = el("div", { className: "bubble dex" }, el("p", { textContent: t.out.summary || "Done." }));
     if (t.out.questions.length) {
       dex.append(el("ul", { className: "questions" }, ...t.out.questions.map((q) => el("li", { textContent: q }))));
+    }
+    if (t.out.actions.length) {
+      dex.append(el("details", { className: "did" },
+        el("summary", { textContent: `What I changed (${t.out.actions.length})` }),
+        el("ul", {}, ...t.out.actions.map((a) => el("li", { textContent: describeAction(a) })))));
     }
     if (i === turns.length - 1 && t.before && !approved) {
       const undo = el("button", { type: "button", className: "link", textContent: "Undo" });
@@ -448,12 +452,13 @@ function renderConvo() {
       });
       dex.append(undo);
     }
-    li.append(dex);
-    return li;
-  }));
+    log.push(dex);
+  });
+  $("convo").replaceChildren(...log);
+  $("convo").scrollTop = $("convo").scrollHeight;
   $("talk-hint").textContent = turns.length
     ? "Fix anything the same way: “No, Aayush didn't have the fries” or “Kunal paid.”"
-    : "Hold and say it like you would to a friend: “I had the pasta, Aayush and Ketan split the pizza, we all shared the fries.”";
+    : "Hold to talk, or type: “I had the pasta, Aayush and Ketan split the pizza, we all shared the fries.”";
 }
 
 function describeAction(a) {
@@ -482,11 +487,10 @@ $("type-form").addEventListener("submit", async (e) => {
 async function runAgent(text, spoken = false) {
   if (!receipt) return act("").fail("Snap a receipt first");
   if (approved) { approved = false; }
-  const turn = { text, pending: true, before: snapshot() };
+  const turn = { text, spoken, pending: true, before: snapshot() };
   turns.push(turn);
   renderConvo();
-  if (!spoken) act("").done(`You: “${text}”`, "said");
-  const a = act("Working out who had what", readerName);
+  const a = act("Working out who had what", true);
   try {
     const out = await postJson("/api/assign", {
       receipt, transcript: text, assignments: currentAssignments(),
@@ -560,7 +564,7 @@ async function stopRecording() {
     act("").done("Hold the button while you talk", "muted");
     return;
   }
-  const a = act("Listening", "Muse Voice Transcribe");
+  const a = act("Listening", true);
   try {
     // People in the split and the receipt's items bias recognition toward the
     // words the split depends on. Contacts go to the agent instead: hinting all
@@ -570,7 +574,7 @@ async function stopRecording() {
     const r = await postFile("/api/voice/transcribe", "audio", encodeWav(chunks, SAMPLE_RATE), "speech.wav",
       { keywords: [...new Set([...people().filter((n) => n !== ME), ...items])].join(",") });
     if (!r.transcript) return a.done("Didn't catch that, try again", "muted");
-    a.done(`Heard “${r.transcript}”`);
+    a.done("Got it");
     await runAgent(r.transcript, true);
   } catch (err) {
     a.fail(err.message);
@@ -683,20 +687,3 @@ $("bd-save-btn").addEventListener("click", async () => {
 });
 
 loadBalanceDesk();
-
-// ---- Which Meta models are serving this page ----
-const MODEL_NAMES = {
-  "muse-spark-1.3": "Muse Spark 1.3",
-  "meta-models/muse-spark-open-1026": "Muse Spark Open",
-};
-const HOSTS = { meta: "Meta Model API", baseten: "Baseten", fireworks: "Fireworks" };
-(async () => {
-  try {
-    const h = await (await fetch("/health")).json();
-    if (!h.llm || h.llm.error) return;
-    const model = MODEL_NAMES[h.llm.model] || h.llm.model;
-    readerName = model;
-    $("powered").textContent = `${model} on ${HOSTS[h.llm.provider] || h.llm.provider} · ` +
-      "Muse Voice Transcribe · SAM 3.1";
-  } catch { /* the footer is decoration */ }
-})();

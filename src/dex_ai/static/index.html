@@ -3,121 +3,136 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dex · Split it</title>
+<title>Balance Dex · Add a bill</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<main>
-  <header>
-    <p class="eyebrow">Dex</p>
-    <h1>Split it, out loud.</h1>
-    <p class="lede">Snap the bill, say who had what. Dex does the rest.</p>
+<canvas class="page-pixels" aria-hidden="true" data-quiet=".hero-text > *, .card, .activity, .brand"></canvas>
+
+<nav class="topbar">
+  <a class="brand" href="/">
+    <span class="brand-icon">
+      <svg class="brand-mark" viewBox="0 0 8 5" shape-rendering="crispEdges" aria-hidden="true" focusable="false"><path fill="currentColor" d="M1 0h1v1H1zM6 0h1v1H6zM0 1h1v4H0zM7 1h1v4H7zM2 1h1v1H2zM5 1h1v1H5zM3 2h2v1H3z"/><path class="brand-mark-eyes" d="M2.3333 3.3333h.6667v.6667h-.6667zM5 3.3333h.6667v.6667H5z"/></svg>
+    </span>
+    <span class="brand-name">Balance Dex</span>
+  </a>
+</nav>
+
+<main class="layout" id="layout">
+  <header class="hero-text">
+    <h1>Instantly add, without the hassle.</h1>
+    <p class="lede">Dex will handle all of it.</p>
   </header>
 
-  <section class="card hero" id="receipt-card">
-    <label class="drop" id="drop">
-      <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
-      <span class="drop-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-2.5h6L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
-      </span>
-      <strong>Snap or choose the bill</strong>
-      <small>Dex reads every line, then you just say who had what.</small>
-    </label>
-    <div class="receipt-summary" id="receipt-summary" hidden>
-      <img id="thumb" alt="">
-      <div class="sum-text">
-        <strong id="sum-title"></strong>
-        <span id="sum-meta"></span>
-      </div>
-      <button type="button" class="link" id="new-receipt">New receipt</button>
-    </div>
-  </section>
-
-  <ol class="activity" id="activity" aria-live="polite"></ol>
-
-  <section class="card" id="voice-card" hidden>
-    <h2>Who had what?</h2>
-    <input id="people" class="people-input" type="text" placeholder="Who's splitting? Aayush, Ketan, Kunal" autocomplete="off" aria-label="Who's splitting">
-    <div class="contacts" id="contacts" hidden></div>
-    <div class="convo" id="convo" aria-live="polite"></div>
-    <button class="mic" id="mic-btn" aria-pressed="false">
-      <span class="dot"></span><span id="mic-label">Hold to talk</span>
-    </button>
-    <p class="hint" id="talk-hint"></p>
-    <form class="type-it" id="type-form">
-      <input id="typed" type="text" placeholder="…or type it" autocomplete="off" aria-label="Type who had what">
-      <button type="submit">Send</button>
-    </form>
-  </section>
-
-  <section class="card" id="proposal-card" hidden>
-    <div class="card-head">
-      <h2>The split</h2>
-      <span class="badge" id="state-badge"></span>
-    </div>
-
-    <div class="segmented views" id="views" role="tablist" aria-label="View" hidden>
-      <button role="tab" aria-selected="true" data-view="photo">Photo</button>
-      <button role="tab" aria-selected="false" data-view="list">List</button>
-    </div>
-
-    <div class="photo-view" id="photo-view" hidden>
-      <div class="photo-wrap">
-        <img id="photo-img" alt="Your receipt with each item marked">
-        <div class="spots" id="spots"></div>
-      </div>
-      <div id="photo-editor"></div>
-    </div>
-
-    <div class="paper" id="paper">
-      <p class="paper-head" id="paper-head"></p>
-      <ul class="lines-out" id="lines-out"></ul>
-      <dl class="paper-totals" id="paper-totals"></dl>
-    </div>
-
-    <div class="bar" id="bar" aria-hidden="true"></div>
-    <ul class="people" id="people-out"></ul>
-
-    <div class="settle" id="settle-out"></div>
-    <p class="meta" id="balance-out"></p>
-
-    <details class="options" id="options">
-      <summary id="options-summary"></summary>
-      <div class="options-body">
-        <label class="field inline">
-          <span>Paid by</span>
-          <select id="payer"></select>
+  <div class="cols">
+    <div class="col-main">
+      <section class="card hero" id="receipt-card">
+        <label class="drop" id="drop">
+          <input type="file" id="photo" accept="image/jpeg,image/png,image/webp" capture="environment" hidden>
+          <span class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h3l2-2.5h6L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </span>
+          <strong>Snap or choose the bill</strong>
         </label>
-        <div class="segmented" id="taxtip" role="radiogroup" aria-label="Tax and tip">
-          <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
-          <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
+        <div class="receipt-summary" id="receipt-summary" hidden>
+          <img id="thumb" alt="">
+          <div class="sum-text">
+            <strong id="sum-title"></strong>
+            <span id="sum-meta"></span>
+          </div>
+          <button type="button" class="link" id="new-receipt">New receipt</button>
+        </div>
+      </section>
+
+      <ol class="activity" id="activity" aria-live="polite"></ol>
+
+      <section class="card chat" id="voice-card" hidden>
+        <img class="chat-fox" src="/static/dex-fox.svg" alt="" aria-hidden="true">
+        <div class="chat-log" id="convo" aria-live="polite"></div>
+        <input id="people" class="people-input" type="text" placeholder="Splitting with… Aayush, Ketan, Kunal" autocomplete="off" aria-label="Who's splitting">
+        <div class="contacts" id="contacts" hidden></div>
+        <div class="chat-input">
+          <button class="mic" id="mic-btn" aria-pressed="false" aria-label="Hold to talk to Dex">
+            <span class="dot"></span><span id="mic-label">Hold to talk</span>
+          </button>
+          <form class="type-it" id="type-form">
+            <input id="typed" type="text" placeholder="…or message Dex" autocomplete="off" aria-label="Message Dex">
+            <button type="submit">Send</button>
+          </form>
+        </div>
+        <p class="hint" id="talk-hint"></p>
+      </section>
+    </div>
+
+    <aside class="col-side card" id="proposal-card" hidden>
+      <div class="card-head">
+        <h2>The split</h2>
+        <span class="badge" id="state-badge"></span>
+      </div>
+
+      <div class="segmented views" id="views" role="tablist" aria-label="View" hidden>
+        <button role="tab" aria-selected="true" data-view="photo">Photo</button>
+        <button role="tab" aria-selected="false" data-view="list">List</button>
+      </div>
+
+      <div class="photo-view" id="photo-view" hidden>
+        <div class="photo-wrap">
+          <img id="photo-img" alt="Your receipt with each item marked">
+          <div class="spots" id="spots"></div>
+        </div>
+        <div id="photo-editor"></div>
+      </div>
+
+      <div class="paper" id="paper">
+        <p class="paper-head" id="paper-head"></p>
+        <ul class="lines-out" id="lines-out"></ul>
+        <dl class="paper-totals" id="paper-totals"></dl>
+      </div>
+
+      <div class="bar" id="bar" aria-hidden="true"></div>
+      <ul class="people" id="people-out"></ul>
+
+      <div class="settle" id="settle-out"></div>
+      <p class="meta" id="balance-out"></p>
+
+      <details class="options" id="options">
+        <summary id="options-summary"></summary>
+        <div class="options-body">
+          <label class="field inline">
+            <span>Paid by</span>
+            <select id="payer"></select>
+          </label>
+          <div class="segmented" id="taxtip" role="radiogroup" aria-label="Tax and tip">
+            <button role="radio" aria-checked="true" data-mode="proportional">Tax &amp; tip by what you had</button>
+            <button role="radio" aria-checked="false" data-mode="equal">Split evenly</button>
+          </div>
+        </div>
+      </details>
+
+      <button class="primary" id="approve-btn" disabled>Looks right</button>
+
+      <div class="approved" id="approved" hidden>
+        <div class="bd-save" id="bd-save" hidden>
+          <h3>Save to Balance Dex</h3>
+          <label class="field inline" id="bd-method-field">
+            <span>You paid with</span>
+            <input id="bd-method" list="bd-methods" placeholder="Amex, Venmo, Cash…" autocomplete="off">
+            <datalist id="bd-methods"></datalist>
+          </label>
+          <p class="meta" id="bd-new"></p>
+          <button class="primary" id="bd-save-btn">Save to Balance Dex</button>
+          <p class="status" id="bd-status" role="status"></p>
+        </div>
+        <pre id="settle-msg"></pre>
+        <div class="row-btns">
+          <button class="secondary" id="copy-btn">Copy message</button>
+          <button class="secondary" id="edit-btn">Edit again</button>
         </div>
       </div>
-    </details>
-
-    <button class="primary" id="approve-btn" disabled>Looks right</button>
-
-    <div class="approved" id="approved" hidden>
-      <div class="bd-save" id="bd-save" hidden>
-        <h3>Save to Balance Desk</h3>
-        <label class="field inline" id="bd-method-field">
-          <span>You paid with</span>
-          <input id="bd-method" list="bd-methods" placeholder="Amex, Venmo, Cash…" autocomplete="off">
-          <datalist id="bd-methods"></datalist>
-        </label>
-        <p class="meta" id="bd-new"></p>
-        <button class="primary" id="bd-save-btn">Save to Balance Desk</button>
-        <p class="status" id="bd-status" role="status"></p>
-      </div>
-      <pre id="settle-msg"></pre>
-      <div class="row-btns">
-        <button class="secondary" id="copy-btn">Copy message</button>
-        <button class="secondary" id="edit-btn">Edit again</button>
-      </div>
-    </div>
-  </section>
-  <footer class="powered" id="powered"></footer>
+    </aside>
+  </div>
 </main>
 <script src="/static/app.js"></script>
+<script src="/static/pixels.js"></script>
 </body>
 </html>

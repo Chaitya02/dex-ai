@@ -1,11 +1,14 @@
 :root {
-  --bg: #f4f2ed;
+  /* Balance Dex's palette */
+  --bg: #f5f4f1;
   --card: #ffffff;
   --paper: #fbfaf6;
-  --ink: #1b1b19;
-  --muted: #6d6a62;
+  --ink: #0a0a0a;
+  --muted: #666666;
   --line: #e4e0d6;
-  --accent: #1f5a3d;
+  --accent: #1a472a;
+  --accent-hover: #15391f;
+  --accent-light: #e6ede8;
   --bad: #b03a2e;
   --warn: #9a6a12;
   --good: #1f7a4d;
@@ -23,13 +26,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141412;
-    --card: #1e1d1a;
-    --paper: #23221e;
-    --ink: #f1efe9;
-    --muted: #a19d93;
+    --bg: #151412;
+    --card: #1c1b18;
+    --paper: #211f1c;
+    --ink: #eceae6;
+    --muted: #98958e;
     --line: #34322d;
-    --accent: #6cc093;
+    --accent: #3f9d6a;
+    --accent-hover: #4fb87f;
+    --accent-light: #1d2c23;
     --bad: #ef8072;
     --warn: #e2b357;
     --good: #6cc093;
@@ -319,3 +324,72 @@ details.options summary { cursor: pointer; color: var(--muted); }
 details.options summary:hover { color: var(--ink); }
 .options-body { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 10px; }
 .tag.all-tag { color: var(--card); background: var(--ink); }
+
+
+/* ================= Balance Dex look ================= */
+body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.page-pixels { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+
+.topbar {
+  max-width: 1120px; margin: 0 auto; padding: 18px 16px 0;
+  display: flex; align-items: center;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none;
+  font-weight: 700; font-size: 17px; letter-spacing: -0.01em; }
+.brand-icon { color: var(--accent); display: inline-flex; }
+.brand-mark { display: block; width: 24px; height: 15px; }
+.brand-mark-eyes { fill: var(--ink); }
+
+main.layout { max-width: 1120px; padding: 28px 16px 64px; }
+.hero-text { text-align: center; margin: 12px auto 28px; max-width: 640px; }
+.hero-text h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; letter-spacing: -0.035em; line-height: 1.08; margin: 0 0 10px; }
+.hero-text .lede { font-size: 17px; }
+.eyebrow { display: none; }
+
+/* One centred column until there's a split to preview, then two. */
+.cols { max-width: 560px; margin: 0 auto; }
+.layout.has-split .cols { max-width: none; }
+@media (min-width: 960px) {
+  .layout.has-split .cols { display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: 24px; align-items: start; }
+  .layout.has-split .col-side { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; margin: 0; }
+  .layout.has-split .hero-text { margin-bottom: 20px; }
+}
+
+/* Green theme for the controls */
+.primary { background: var(--accent); color: #fff; }
+.primary:not(:disabled):hover { background: var(--accent-hover); }
+.type-it button, .chip.all[aria-pressed="true"], .tag.all-tag, .step { background: var(--accent); color: #fff; }
+.drop-icon { background: var(--accent); color: #fff; }
+.hero .drop { background: var(--accent-light); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.hero .drop:hover { border-color: var(--accent); }
+.segmented button[aria-checked="true"], .views button[aria-selected="true"] { background: var(--accent); color: #fff; }
+.badge.ok { color: var(--accent); background: var(--accent-light); }
+@media (prefers-color-scheme: dark) {
+  .primary, .type-it button, .chip.all[aria-pressed="true"], .tag.all-tag, .drop-icon,
+  .segmented button[aria-checked="true"], .views button[aria-selected="true"] { color: #0f1d15; }
+}
+
+/* ---- Chat with Dex, with the fox on top ---- */
+.card.chat { position: relative; margin-top: 44px; padding-top: 22px; }
+.chat-fox {
+  position: absolute; right: 22px; top: -40px; width: 66px; height: 44px;
+  image-rendering: pixelated; pointer-events: none;
+}
+.chat-log { display: grid; gap: 10px; max-height: 420px; overflow-y: auto; margin-bottom: 12px; padding-right: 2px; }
+.chat-log:empty { display: none; }
+.bubble { max-width: 88%; padding: 9px 13px; font-size: 14px; line-height: 1.45; }
+.bubble p { margin: 0; }
+.bubble.dex { justify-self: start; background: var(--accent-light); color: var(--ink); border-radius: 14px 14px 14px 4px; }
+.bubble.you { justify-self: end; background: var(--accent); color: #fff; border-radius: 14px 14px 4px 14px; }
+@media (prefers-color-scheme: dark) { .bubble.you { color: #0f1d15; } }
+.bubble.you.spoken p::before { content: "🎙 "; }
+.bubble.thinking p { letter-spacing: 3px; color: var(--muted); animation: pulse-text 1.2s infinite; }
+@keyframes pulse-text { 50% { opacity: .35; } }
+.bubble.error { background: color-mix(in srgb, var(--bad) 12%, var(--card)); color: var(--bad); }
+.bubble .did { margin-top: 6px; color: var(--muted); font-size: 13px; }
+.bubble .questions { margin: 6px 0 0; padding-left: 18px; color: var(--warn); }
+.bubble .link { margin-top: 6px; display: inline-block; }
+.chat .people-input { margin: 0 0 10px; font-size: 14px; }
+.chat-input { display: grid; gap: 8px; }
+.chat .type-it { margin-top: 0; }
+.chat #talk-hint { margin: 10px 0 0; font-size: 13px; }
